@@ -69,29 +69,24 @@ bool close_file(FILE* f) {
 
 char* path_filename(char* path) {
   str path_str = str_from_cstr(path);
+  int unix = str_find_rev(path_str, '/');
+  int wind = str_find_rev(path_str, '\\');
 
-  StrList sl = str_split_match(path_str, str_from_cstr("/"));
-  str filename = StrList_last(sl);
-  StrList_free(&sl);
-  
-  sl = str_split_match(filename, str_from_cstr("\\"));
-  filename = StrList_last(sl);
-  StrList_free(&sl);
+  if (unix == -1 && wind == -1) return NULL;
+  int i = MAX(unix, wind);
 
-  return filename.data;
+  return path_str.data + i + 1;
 }
 
 char* path_filename_ext(char* path) {
   str path_str = str_from_cstr(path);
-
-  StrList sl = str_split_match(path_str, str_from_cstr("."));
-  str ext = StrList_last(sl);
-  StrList_free(&sl);
-
-  return ext.data;
+  int i = str_find_rev(path_str, '.');
+  if (i == -1) return NULL;
+  return path_str.data + i + 1;
 }
 
 void open_dir(char* dirpath) {
+  #ifndef _WIN32
   DIR* d = opendir(dirpath);
   struct dirent* dp;
   
@@ -114,10 +109,11 @@ void open_dir(char* dirpath) {
   // }
 
   closedir(d);
+  #endif
 }
 
 bool file_exists(char* path) {
-  // search for struct stat
+  // google up for struct stat
   return false;
 }
 

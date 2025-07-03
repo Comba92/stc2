@@ -8,6 +8,7 @@
 
 #define rangefor(type, it, start, end) for (type it = (start); it < end; ++it)
 #define listfor(type, it, list) for (type it = 0; it < (list)->len; ++it)
+#define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
 #define list_def(type, list_name) \
@@ -21,7 +22,7 @@ void list_name##_reserve(list_name* l, size_t new_cap) { \
     l->cap = l->cap == 0 ? 16 : l->cap; \
     while (new_cap > l->cap) l->cap *= 2; \
  \
-    l->data = realloc(l->data, sizeof(l->data[0]) * l->cap); \
+    l->data = realloc(l->data, sizeof(type) * l->cap); \
     assert(l->data != NULL && "list realloc failed"); \
   } \
 } \
@@ -77,6 +78,8 @@ void list_name##_filter(list_name* l, list_name##FilterFn pred) { \
 } \
  \
 void list_name##_swap(list_name* l, size_t a, size_t b) { \
+  list_name##_assert(*l, a); \
+  list_name##_assert(*l, b); \
   type tmp = l->data[a]; \
   l->data[a] = l->data[b]; \
   l->data[b] = tmp; \
@@ -99,7 +102,7 @@ void list_name##_append(list_name* this, list_name other) { \
   } \
   this->len += other.len; \
   */ \
-  memcpy(this->data + this->len, other.data, other.len * sizeof(this->data[0])); \
+  memcpy(this->data + this->len, other.data, other.len * sizeof(type)); \
   this->len += other.len; \
 } \
  \
@@ -111,7 +114,7 @@ list_name list_name##_from_array(type* arr, size_t arr_len) { \
     res.data[res.len++] = arr[i]; \
   } \
   */ \
-  memcpy(res.data, arr, arr_len * sizeof(res.data[0])); \
+  memcpy(res.data, arr, arr_len * sizeof(type)); \
   res.len += arr_len; \
   return res; \
 } \
@@ -124,7 +127,7 @@ void list_name##_append_array(list_name* l, type* arr, size_t arr_len) { \
     l->data[len + i] = arr[i]; \
   } \
   */ \
-  memcpy(l->data + l->len, arr, arr_len * sizeof(l->data[0])); \
+  memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
   l->len += arr_len; \
 } \
  \
@@ -154,6 +157,17 @@ void list_reserve(List<T>* l, size_t new_cap) {
 
     l->data = realloc(l->data, sizeof(l->data[0]) * l->cap);
     assert(l->data != NULL && "list realloc failed");
+  }
+}
+
+void list_resize(List<T>* l, size_t new_len, type value) {
+  if (new_len <= l->len) {
+    l->len = new_len;
+  } else {
+    list_reserve(l, l->len + new_len);
+    for (int i=0; i<new_len; ++i) {
+      l->data[l->len + i] = value;
+    }
   }
 }
 
@@ -198,6 +212,8 @@ void list_filter(List<T>* l, listFilterFn pred) {
 }
 
 void list_swap(List<T>* l, size_t a, size_t b) {
+  list_assert(l, a);
+  list_assert(l, b);
   T tmp = l->data[a];
   l->data[a] = l->data[b];
   l->data[b] = tmp;

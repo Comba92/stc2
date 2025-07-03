@@ -38,6 +38,10 @@ str str_empty() {
   return (str) { 0, "" };
 }
 
+bool str_is_empty(str s) {
+  return s.data == NULL || s.len == 0;
+}
+
 // TODO: handle negative indexes (back of string)
 str str_slice(str s, size_t start, size_t end) {
   assert(start <= end && "str_slice(): start must be smaller than end");
@@ -48,6 +52,10 @@ str str_slice(str s, size_t start, size_t end) {
     .len = end - start,
     .data = s.data + start,
   };
+}
+
+str cstr_slice(char* c, size_t start, size_t end) {
+  return str_slice(str_from_cstr(c), start, end);
 }
 
 bool str_eq(str a, str b) {
@@ -93,6 +101,13 @@ int str_find(str s, char c) {
 
   char* res = memchr(s.data, c, s.len);
   return res != NULL ? res - s.data : -1;
+}
+
+int str_find_rev(str s, char c) {
+  for (int i=s.len-1; i >= 0; --i) {
+    if (s.data[i] == c) return i;
+  }
+  return -1;
 }
 
 bool str_contains(str s, char c) {
@@ -227,15 +242,17 @@ double str_parse_float(str s) {
 }
 
 list_def(str, StrList)
-// TODO: fix this
-StrList str_split(str s, char c) {
+StrList str_split_char(str s, char c) {
   StrList ss = {0};
 
-  for (int i=0; s.len > 0 && i<s.len; ++i) {
-    if (s.data[i] == c) {
-      StrList_push(&ss, str_slice(s, 0, i));
-      s = str_slice(s, i+1, s.len);
+  while (s.len > 0) {
+    int i = str_find(s, c);
+    if (i == -1) {
+      StrList_push(&ss, str_slice(s, 0, s.len));
+      break;
     }
+    StrList_push(&ss, str_slice(s, 0, i));
+    s = str_slice(s, i+1, s.len);
   }
 
   StrList_push(&ss, str_slice(s, 0, s.len));
@@ -259,7 +276,7 @@ StrList str_split_match(str s, str pattern) {
 }
 
 StrList str_lines(str s) {
-  return str_split(s, '\n');
+  return str_split_char(s, '\n');
 }
 
 //////////////////////
@@ -283,7 +300,8 @@ str String_to_str(String sb) {
 // }
 
 void String_append_cstr(String* sb, char* s) {
-  String_append_array(sb, s, strlen(s));
+  // strlen excludes the null; we want it here
+  String_append_array(sb, s, strlen(s)+1);
 }
 
 String String_from_cstr(char* s) {
@@ -312,12 +330,11 @@ String String_format(char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
-  const size_t buf_len = 1024;
-  char* buf = malloc(buf_len);
+  const size_t buf_len = 512;
+  char buf[buf_len];
   vsnprintf(buf, buf_len, fmt, args);
 
   String res = String_from_cstr(buf);
-  free(buf);
   va_end(args);
 
   return res;

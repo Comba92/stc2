@@ -85,7 +85,8 @@ int main() {
   res_dbg(str_parse_int(str_from_cstr("a1234")));
   res_dbg(str_parse_int(str_from_cstr("1234a")));
 
-  StrList ss1 = str_split_match(str_from_cstr("abc,,bcd,cde,defg"), str_from_cstr(","));
+  // StrList ss1 = str_split_match(str_from_cstr("abc,,bcd,cde,defg"), str_from_cstr(","));
+  StrList ss1 = str_split_char(str_from_cstr("abc,,bcd,cde,defg"), ',');
   listforeach(str, s, &ss1) {
     str_dbg(*s);
   }
