@@ -6,7 +6,16 @@ int main() {
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));
   printf("%s\n", path_filename_ext("D:\\code\\stc2\\str_test.c"));
 
-  open_dir(".");
+  read_dir(".");
 
-  open_dir("/home/comba");
+  read_dir("/home/comba");
+
+  printf("%d\n", file_exists("./test.txt"));
+  printf("%d\n", file_exists("./faggot_killer.txt"));
+  printf("%d\n", dir_exists(".."));
+  printf("%d\n", dir_exists("../stc"));
+  printf("%d\n", dir_exists("../urmom"));
+
+  make_dir_if_not_exists("./test1");
+  make_dir_if_not_exists("./test2");
 }

@@ -6,7 +6,9 @@
 
 #ifndef _WIN32
   #include <dirent.h>
+  #include <sys/stat.h>
 #else
+  #include <windows.h>
 #endif
 
 char* read_file_to_string(char* path) {
@@ -85,7 +87,7 @@ char* path_filename_ext(char* path) {
   return path_str.data + i + 1;
 }
 
-void open_dir(char* dirpath) {
+void read_dir(char* dirpath) {
   #ifndef _WIN32
   DIR* d = opendir(dirpath);
   struct dirent* dp;
@@ -109,12 +111,68 @@ void open_dir(char* dirpath) {
   // }
 
   closedir(d);
+
+  #else
+  char buf[MAX_PATH];
+  snprintf(buf, MAX_PATH, "%s\\*", dirpath);
+
+  // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
+  WIN32_FIND_DATA data;
+  HANDLE h = FindFirstFile(buf, &data);
+  if (h == INVALID_HANDLE_VALUE) {
+    // todo handle error
+    // errno = ENOSYS;
+  }
+
+  do {
+    printf("%s %d\n", data.cFileName, data.nFileSizeLow);
+  } while(FindNextFile(h, &data) != 0);
+  // TODO handle errors
+
+  FindClose(h);
   #endif
 }
 
 bool file_exists(char* path) {
-  // google up for struct stat
-  return false;
+  #ifndef _WIN32
+  struct stat buf;
+  return stat(path, &buf) != 0 && S_ISREG(buf.st_mode);
+  #else
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesa?redirectedfrom=MSDN
+  DWORD attribs = GetFileAttributes(path);
+  return attribs != INVALID_FILE_ATTRIBUTES;
+  #endif
+}
+
+bool dir_exists(char* path) {
+  #ifndef _WIN32
+  struct stat buf;
+  return stat(path, &buf) != 0 && S_ISDIR(buf.st_mode);
+  return res;
+  #else
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesa?redirectedfrom=MSDN
+  DWORD attribs = GetFileAttributes(path);
+  return attribs != INVALID_FILE_ATTRIBUTES && (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  #endif
+}
+
+bool make_dir_if_not_exists(char* path) {
+  if (dir_exists(path)) return false;
+  
+  #ifndef _WIN32
+    bool res = mkdir(path) != 0;
+    if (!res) {
+      // todo: handler errors
+    }
+    return res;
+  #else
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createdirectorya?redirectedfrom=MSDN
+    bool res = CreateDirectory(path, NULL) == 0;
+    if (!res) {
+      // todo: handler errors
+    }
+    return res;
+  #endif
 }
 
 // Nob_Fd nob_fd_open_for_read(const char *path);
@@ -127,6 +185,7 @@ bool file_exists(char* path) {
 
 // const char *nob_get_current_dir_temp(void)
 // int nob_file_exists(const char *file_path);
+// int nob_dir_exists(const char *dir_path);
 // bool nob_mkdir_if_not_exists(const char *path);
 // bool nob_copy_file(const char *src_path, const char *dst_path);
 // bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
