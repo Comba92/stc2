@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include "stc_str.h"
 
+#ifndef _WIN32
+  #include <dirent.h>
+#else
+#endif
+
 char* read_file_to_string(char* path) {
   FILE* f = fopen(path, "rb");
   if (f == NULL) {
@@ -65,11 +70,11 @@ bool close_file(FILE* f) {
 char* path_filename(char* path) {
   str path_str = str_from_cstr(path);
 
-  StrList sl = str_split(path_str, str_from_cstr("/"));
+  StrList sl = str_split_match(path_str, str_from_cstr("/"));
   str filename = StrList_last(sl);
   StrList_free(&sl);
   
-  sl = str_split(filename, str_from_cstr("\\"));
+  sl = str_split_match(filename, str_from_cstr("\\"));
   filename = StrList_last(sl);
   StrList_free(&sl);
 
@@ -77,9 +82,43 @@ char* path_filename(char* path) {
 }
 
 char* path_filename_ext(char* path) {
-  char* filename = path_filename(path);
+  str path_str = str_from_cstr(path);
+
+  StrList sl = str_split_match(path_str, str_from_cstr("."));
+  str ext = StrList_last(sl);
+  StrList_free(&sl);
+
+  return ext.data;
+}
+
+void open_dir(char* dirpath) {
+  DIR* d = opendir(dirpath);
+  struct dirent* dp;
   
-  StrList sl = str_split(filename, str_from_cstr("."))
+  // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
+  // https://man7.org/linux/man-pages/man3/readdir.3p.html
+  while ((dp = readdir(d)) != NULL) {
+    printf("d_name = %s\n", dp->d_name);
+  }
+
+  printf("\n");
+
+  // struct dirent **entries;
+  // int n = scandir(".", &entries, 0, alphasort);
+  // if (n < 0) {
+    // perror("scandir");
+  // } else {
+    // for (int i = 0; i < n; i++) {
+      //   printf("%s\n", entries[i]->d_name);
+      // }
+  // }
+
+  closedir(d);
+}
+
+bool file_exists(char* path) {
+  // search for struct stat
+  return false;
 }
 
 // Nob_Fd nob_fd_open_for_read(const char *path);
