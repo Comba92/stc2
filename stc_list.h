@@ -140,6 +140,7 @@ void list_name##_free(list_name* l) { \
 
 
 list_def(int, IntList)
+list_def(char*, CstrList)
 
 #endif
 

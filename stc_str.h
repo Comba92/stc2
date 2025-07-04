@@ -9,9 +9,6 @@
 #include <ctype.h>
 #include <assert.h>
 
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
 // TODO: temporary allocator for Strings
 
 typedef struct {
@@ -46,12 +43,16 @@ bool str_is_empty(str s) {
 str str_slice(str s, size_t start, size_t end) {
   assert(start <= end && "str_slice(): start must be smaller than end");
 
+  #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
   start = MIN(start, s.len);
   end   = MIN(end, s.len);
   return (str) {
     .len = end - start,
     .data = s.data + start,
   };
+
+  #undef MIN
 }
 
 str cstr_slice(char* c, size_t start, size_t end) {

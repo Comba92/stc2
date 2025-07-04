@@ -1,14 +1,20 @@
 #include "stc_fs.h"
 
 int main() {
-  printf("%s\n", read_file_to_string("test.txt"));
+  printf("%s\n", file_read_to_string("test.txt"));
 
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));
   printf("%s\n", path_filename_ext("D:\\code\\stc2\\str_test.c"));
 
-  read_dir(".");
+  DirEntries entries = {0};
+  entries = dir_read(".");
 
-  read_dir("/home/comba");
+  printf("Entries = %d\n", entries.len);
+  listforeach(DirEntry, e, &entries) {
+    printf("%s/%s %d\n", e->parent, e->name, e->type);
+  }
+
+  dir_read("/home/comba");
 
   printf("%d\n", file_exists("./test.txt"));
   printf("%d\n", file_exists("./faggot_killer.txt"));
@@ -16,6 +22,18 @@ int main() {
   printf("%d\n", dir_exists("../stc"));
   printf("%d\n", dir_exists("../urmom"));
 
-  make_dir_if_not_exists("./test1");
-  make_dir_if_not_exists("./test2");
+  dir_make_if_not_exists("./test1");
+  dir_make_if_not_exists("./test2/daaaaa/dsadasad/adasdas");
+  dir_remove_if_exists("./test1");
+
+  printf("Working dir: %s\n", dir_current());
+  printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt"));
+  printf("Delete: %d\n", file_delete("./test2.txt"));
+  printf("Rename: %d\n", file_move("./test.txt", "./kys.txt"));
+  printf("Create: %d\n", file_create_if_not_exists("test3.txt"));
+
+  printf("Copy FAIL: %d\n", file_copy("./test4.txt", "./test2.txt"));
+  printf("Delete FAIL: %d\n", file_delete("./test4.txt"));
+  printf("Rename FAIL: %d\n", file_move("./test4.txt", "./kys.txt"));
+  printf("Create FAIL: %d\n", file_create_if_not_exists("kys.txt"));
 }
