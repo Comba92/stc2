@@ -5,9 +5,11 @@
 #include <string.h>
 #include <stdbool.h>
 #include "stc_list.h"
+#include <errno.h>
 
 #ifndef _WIN32
   #include <dirent.h>
+  #include <fcntl.h>
   #include <sys/stat.h>
   #include <unistd.h>
 
@@ -80,17 +82,12 @@ char* file_read_to_string(char* path) {
 }
 
 char* path_filename(char* path) {
-  char* unix = strrchr(path, '/');
-  char* wind = strrchr(path, '\\');
-
-  #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
-  if (unix == NULL && wind == NULL) return path;
-  char* res = MAX(unix, wind);
-
+  char* unix_path = strrchr(path, '/');
+  char* wind_path = strrchr(path, '\\');
+  if (unix_path == NULL && wind_path == NULL) return path;
+  
+  char* res = unix_path > wind_path ? unix_path : wind_path;
   return res + 1;
-
-  #undef MAX
 }
 
 char* path_filename_ext(char* path) {
@@ -143,7 +140,7 @@ FileType file_type(char* path) {
       return FileType_Other;
     }
     
-    switch (buf.mode_t & S_IFMT) {
+    switch (buf.st_mode & S_IFMT) {
       case S_IFREG: return FileType_File;
       case S_IFDIR: return FileType_Dir;
       case S_IFLNK: return FileType_Link;
@@ -196,7 +193,7 @@ DirEntries dir_read(char* dirpath) {
       }
 
       entry.name = dp->d_name;
-      switch (statbuf.mode_t & S_IFMT) {
+      switch (statbuf.st_mode & S_IFMT) {
         case S_IFREG: entry.type = FileType_File; break;
         case S_IFDIR: entry.type = FileType_Dir; break;
         case S_IFLNK: entry.type = FileType_Link; break;
@@ -295,7 +292,7 @@ bool dir_make_if_not_exists(char* path) {
   if (dir_exists(path)) return true;
   
   #ifndef _WIN32
-    bool res = mkdir(path) == 0;
+    bool res = mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO) == 0;
     if (!res) perror("Couldn't create directory");
     return res;
   #else
@@ -332,7 +329,7 @@ bool dir_remove_if_exists(char* path) {
   #ifndef _WIN32
     bool res = rmdir(path) == 0;
     if (!res) perror("Couldn't remove directory");
-    return res !;
+    return res;
   #else
     bool res = RemoveDirectory(path) != 0;
     if (!res) perror_windows("Couldn't remove directory");

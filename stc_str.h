@@ -10,6 +10,7 @@
 #include <assert.h>
 
 // TODO: temporary allocator for Strings
+// TODO: str iterator
 
 typedef struct {
   size_t len;
