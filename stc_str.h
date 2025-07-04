@@ -11,6 +11,7 @@
 
 // TODO: temporary allocator for Strings
 // TODO: str iterator
+// TODO: change all str_slice to take/skip
 
 typedef struct {
   size_t len;
@@ -143,7 +144,9 @@ IntList str_match_all(str s, str target) {
   return matches;
 }
 
+
 str str_skip(str s, size_t n) {
+  if (n > s.len) return str_empty();
   return str_slice(s, n, s.len);
 }
 str str_skip_rev(str s, size_t n) {
@@ -157,6 +160,7 @@ str str_skip_until_char(str s, char c) {
 }
 
 str str_take(str s, size_t n) {
+  if (n > s.len) return s;
   return str_slice(s, 0, n);
 }
 str str_take_rev(str s, size_t n) {
@@ -278,8 +282,33 @@ StrList str_split_match(str s, str pattern) {
   return ss;
 }
 
-StrList str_lines(str s) {
+StrList str_split_lines(str s) {
   return str_split_char(s, '\n');
+}
+
+typedef struct {
+  str s;
+} StrIter;
+
+StrIter str_iter(str s) {
+  return (StrIter) {s};
+}
+
+str iter_next_line(StrIter* it) {
+  int i = str_find(it->s, '\n');
+  if (i == -1) {
+    str res = it->s;
+    it->s = str_empty();
+    return res;
+  } else {
+    str res = str_take(it->s, i);
+    it->s = str_skip(it->s, i+1);
+    return res;
+  }
+}
+
+bool iter_at_end(StrIter* it) {
+  return it->s.len == 0;
 }
 
 //////////////////////
@@ -303,11 +332,18 @@ str String_to_str(String sb) {
 // }
 
 void String_append_null(String* sb) {
-  String_push(sb, '\0');
+  // String_push(sb, '\0');
+  // whenever we append a cstr, we also push the null,
+  // without incrementing the size; this lets us use the
+  // string builder as a cstr. 
+  // Any other append will overwrite the null,
+  // so it has to be appended again
+  sb->data[sb->len] = '\0';
 }
 
 void String_append_cstr(String* sb, char* s) {
   String_append_array(sb, s, strlen(s));
+  String_append_null(sb);
 }
 
 void String_append_str(String* sb, str sv) {
@@ -328,61 +364,58 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
 
-#define fmt_buf_len 2048
-static char fmt_buf[fmt_buf_len];
-String String_format(char* fmt, ...) {
+#define FMT_BUF_LEN 2048
+static char fmt_buf[FMT_BUF_LEN];
+String String_format(String* sb, char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  vsnprintf(fmt_buf, fmt_buf_len, fmt, args);
+  vsnprintf(fmt_buf, FMT_BUF_LEN, fmt, args);
   va_end(args);
 
-  return String_from_cstr(fmt_buf);
+  sb->len = 0;
+  String_append_cstr(sb, fmt_buf);
+  return *sb;
 }
 
-String int_to_str(int n) {
-  String sb = String_format("%d", n);
-  String_append_null(&sb);
-  return sb;
+String int_to_str(String* sb, int n) {
+  String_format(sb, "%d", n);
+  return *sb;
 }
 
-String float_to_str(double n) {
-  String sb = String_format("%f", n);
-  String_append_null(&sb);
-  return sb;
+String float_to_str(String* sb, double n) {
+  String_format(sb, "%f", n);
+  return *sb;
 }
 
-String str_concat(String a, String b) {
-  String res = {0};
-  String_append(&res, a);
-  String_append(&res, b);
-  return res;
+String str_concat(String* sb, String a, String b) {
+  sb->len = 0;
+  String_append(sb, a);
+  String_append(sb, b);
+  return *sb;
 }
 
-String str_repeat(str s, size_t n) {
-  String res = {0};
-  String_reserve(&res, s.len * n);
-  while (n > 0) {
-    String_append_str(&res, s);
-    n--;
+String str_repeat(String* sb, str sv, size_t n) {
+  sb->len = 0;
+  String_reserve(sb, sv.len * n);
+  while (n-- > 0) String_append_str(sb, sv);
+
+  return *sb;
+}
+
+String str_to_upper(String* sb, str sv) {
+  sb->len = 0;
+  listforeach(char, c, &sv) {
+    String_push(sb, toupper(*c));
   }
-
-  return res;
+  return *sb;
 }
 
-String str_to_upper(str s) {
-  String res = {0};
-  listforeach(char, c, &s) {
-    String_push(&res, toupper(*c));
+String str_to_lower(String* sb, str sv) {
+  sb->len = 0;
+  listforeach(char, c, &sv) {
+    String_push(sb, tolower(*c));
   }
-  return res;
-}
-
-String str_to_lower(str s) {
-  String res = {0};
-  listforeach(char, c, &s) {
-    String_push(&res, tolower(*c));
-  }
-  return res;
+  return *sb;
 }
 
 void String_to_upper(String* s) {
@@ -393,50 +426,50 @@ void String_to_lower(String* s) {
   listforeach(char, c, s) *c = tolower(*c);
 }
 
-String str_replace(str s, str from, str to) {
-  int match = str_match(s, from);
-  if (match == -1) return String_from_str(s);
+String str_replace(String* sb, str sv, str from, str to) {
+  int match = str_match(sv, from);
+  if (match == -1) return String_from_str(sv);
 
-  String res = {0};
-  String_append_str(&res, str_slice(s, 0, match));
-  String_append_str(&res, to);
-  String_append_str(&res, str_slice(s, match + from.len, s.len));
-  return res;
+  sb->len = 0;
+  String_append_str(sb, str_slice(sv, 0, match));
+  String_append_str(sb, to);
+  String_append_str(sb, str_slice(sv, match + from.len, sv.len));
+  return *sb;
 }
 
-String str_replace_all(str s, str from, str to) {
-  IntList matches = str_match_all(s, from);
-
-  String res = {0};
+String str_replace_all(String* sb, str sv, str from, str to) {
+  IntList matches = str_match_all(sv, from);
+  
+  sb->len = 0;
   int last = 0;
   listforeach(int, match, &matches) {
-    String_append_str(&res, str_slice(s, last, *match));
-    String_append_str(&res, to);
+    String_append_str(sb, str_slice(sv, last, *match));
+    String_append_str(sb, to);
     last = *match + from.len;
   }
-  String_append_str(&res, str_slice(s, last, s.len));
-  return res;
+  String_append_str(sb, str_slice(sv, last, sv.len));
+  return *sb;
 }
 
-String str_join(StrList strs, str join) {
-  String ss = {0};
-  if (strs.len == 0) { return ss; }
+String str_join(String* sb, StrList strs, str join) {
+  sb->len = 0;
+  if (strs.len == 0) { return *sb; }
 
   for(int i=0; i<strs.len-1; ++i) {
-    String_append_str(&ss, strs.data[i]);
-    String_append_str(&ss, join);
+    String_append_str(sb, strs.data[i]);
+    String_append_str(sb, join);
   }
-  String_append_str(&ss, StrList_last(strs));
+  String_append_str(sb, StrList_last(strs));
 
-  return ss;
+  return *sb;
 }
 
-String str_join_two(str a, str b, str join) {
-  String sb = {0};
-  String_append_str(&sb, a);
-  String_append_str(&sb, join);
-  String_append_str(&sb, b);
-  return sb;
+String str_join_two(String* sb, str a, str b, str join) {
+  sb->len = 0;
+  String_append_str(sb, a);
+  String_append_str(sb, join);
+  String_append_str(sb, b);
+  return *sb;
 }
 
 #define str_fmt "%.*s"
