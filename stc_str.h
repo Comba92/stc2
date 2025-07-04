@@ -1,5 +1,5 @@
-#ifndef STC_STRING_IMPL
-#define STC_STRING_IMPL
+#ifndef STC_STR_IMPL
+#define STC_STR_IMPL
 
 #include "stc_list.h"
 #include <stdlib.h>
@@ -31,8 +31,9 @@ str str_from_cstr_unchecked(char* s, size_t len) {
   return (str) { len, s };
 }
 
+const str STR_EMPTY = {0, ""};
 str str_empty() {
-  return (str) { 0, "" };
+  return STR_EMPTY;
 }
 
 bool str_is_empty(str s) {
@@ -300,9 +301,16 @@ str String_to_str(String sb) {
 //   };
 // }
 
+void String_append_null(String* sb) {
+  String_push(sb, '\0');
+}
+
 void String_append_cstr(String* sb, char* s) {
-  // strlen excludes the null; we want it here
-  String_append_array(sb, s, strlen(s)+1);
+  String_append_array(sb, s, strlen(s));
+}
+
+void String_append_str(String* sb, str sv) {
+  String_append_array(sb, sv.data, sv.len);
 }
 
 String String_from_cstr(char* s) {
@@ -312,41 +320,34 @@ String String_from_cstr(char* s) {
 }
 
 String String_from_str(str s) {
-  return String_from_cstr(str_to_cstr(s));
+  return String_from_array(s.data, s.len);
 }
 
-char* String_to_cstr(String* sb) {
-  return str_to_cstr(String_to_str(*sb));
+char* String_to_cstr(String sb) {
+  return str_to_cstr(String_to_str(sb));
 }
 
-void String_append_str(String* sb, str sv) {
-  String_append_array(sb, sv.data, sv.len);
-}
-
-void String_append_null(String* sb) {
-  String_push(sb, '\0');
-}
-
+#define fmt_buf_len 2048
+static char fmt_buf[fmt_buf_len];
 String String_format(char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-
-  const size_t buf_len = 512;
-  char buf[buf_len];
-  vsnprintf(buf, buf_len, fmt, args);
-
-  String res = String_from_cstr(buf);
+  vsnprintf(fmt_buf, fmt_buf_len, fmt, args);
   va_end(args);
 
-  return res;
+  return String_from_cstr(fmt_buf);
 }
 
 String int_to_str(int n) {
-  return String_format("%d", n);
+  String sb = String_format("%d", n);
+  String_append_null(&sb);
+  return sb;
 }
 
 String float_to_str(double n) {
-  return String_format("%f", n);
+  String sb = String_format("%f", n);
+  String_append_null(&sb);
+  return sb;
 }
 
 String str_concat(String a, String b) {
@@ -381,6 +382,14 @@ String str_to_lower(str s) {
     String_push(&res, tolower(*c));
   }
   return res;
+}
+
+void String_to_upper(String* s) {
+  listforeach(char, c, s) *c = toupper(*c);
+}
+
+void String_to_lower(String* s) {
+  listforeach(char, c, s) *c = tolower(*c);
 }
 
 String str_replace(str s, str from, str to) {
@@ -419,6 +428,14 @@ String str_join(StrList strs, str join) {
   String_append_str(&ss, StrList_last(strs));
 
   return ss;
+}
+
+String str_join_two(str a, str b, str join) {
+  String sb = {0};
+  String_append_str(&sb, a);
+  String_append_str(&sb, join);
+  String_append_str(&sb, b);
+  return sb;
 }
 
 #define str_fmt "%.*s"

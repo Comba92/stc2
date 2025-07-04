@@ -127,7 +127,7 @@ void name##_reserve(name* m, size_t new_cap) { \
 } \
  \
 type* name##_get(name m, char* key) { \
-  if (m.cap == 0) return NULL; \
+  if (m.len == 0) return NULL; \
    \
   name##Entry* e = name##_search(m, key); \
   if (key_is_marker(e->key)) return NULL; \
@@ -156,13 +156,13 @@ bool name##_insert(name* m, char* key, type val) { \
 } \
  \
 bool name##_remove(name* m, char* key) { \
+  if (m->len == 0) return NULL; \
   name##Entry* e = name##_search(*m, key); \
   if (key_is_empty(e->key)) { \
     return false; \
   } else { \
     free(e->key); \
     e->key = MAP_ENTRY_REMOVED; \
-    m->len -= 1; \
     return true; \
   } \
 } \
@@ -181,17 +181,17 @@ void name##_free(name* m) { \
 
 
 /*
-  typedef struct {
+  typedef struct<T> {
     char *key;
-    int val;
-  } MapEntry;
+    T val;
+  } MapEntry<T>;
 
-  typedef struct {
+  typedef struct<T> {
     size_t cap, len;
-    MapEntry* entries;
-  } Map;
+    MapEntry<T>* entries;
+  } Map<T>;
 
-  MapEntry* map_search(Map m, char* key) {
+  MapEntry<T>* map_search(Map<T> m, char* key) {
     size_t hash = hash_key(key);
     // invariant: capacity is always multiple of two;
     // "hash % map->cap" can be rewritten as a logical AND, avoiding division
@@ -209,7 +209,7 @@ void name##_free(name* m) { \
     return e;
   }
 
-  MapEntry* map_search_for_insert(Map m, char* key) {
+  MapEntry<T>* map_search_for_insert(Map<T> m, char* key) {
     size_t hash = hash_key(key);
     size_t i = hash & (m.cap-1);
     MapEntry* e = &m.entries[i];
@@ -225,7 +225,7 @@ void name##_free(name* m) { \
     return e;
   }
 
-  void map_reserve(Map* m, size_t new_cap) {
+  void map_reserve(Map<T>* m, size_t new_cap) {
     if (new_cap > m->cap) {
       Map new_map = {0};
       new_map.cap = m->cap == 0 ? 16 : m->cap;
@@ -255,7 +255,7 @@ void name##_free(name* m) { \
     }
   }
 
-  int* map_get(Map m, char* key) {
+  T* map_get(Map<T> m, char* key) {
     if (m.cap == 0) return NULL;
     
     MapEntry* e = map_search(m, key);
@@ -263,11 +263,11 @@ void name##_free(name* m) { \
     return &e->val;
   }
 
-  bool map_contains(Map m, char* key) {
+  bool map_contains(Map<T> m, char* key) {
     return map_get(m, key) != NULL;
   }
 
-  bool map_insert(Map* m, char* key, int val) {
+  bool map_insert(Map<T>* m, char* key, int val) {
     map_reserve(m, m->len+1);
     MapEntry* entry = map_search_for_insert(*m, key);
     entry->val = val;
@@ -284,14 +284,14 @@ void name##_free(name* m) { \
     }
   }
 
-  bool map_remove(Map* m, char* key) {
+  bool map_remove(Map<T>* m, char* key) {
+    if (m->len == 0) return NULL;
     MapEntry* entry = map_search(*m, key);
     if (entry->key == NULL) {
       return false;
     } else {
       free(entry->key);
       entry->key = MAP_ENTRY_REMOVED;
-      m->len -= 1;
       return true;
     }
   }
@@ -300,7 +300,7 @@ void name##_free(name* m) { \
     return (double) m.len / (double) m.cap;
   }
 
-  void map_free(Map* m) {
+  void map_free(Map<T>* m) {
     // keys are owned, free them
     for (int i=0; i<m->cap; ++i) {
       char* key = m->entries[i].key;
