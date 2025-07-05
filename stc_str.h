@@ -9,8 +9,8 @@
 #include <ctype.h>
 #include <assert.h>
 
-// TODO: temporary allocator for Strings
-// TODO: str iterator
+// TODO: temporary allocator for cstrings
+// TODO: split iterator
 // TODO: change all str_slice to take/skip
 
 typedef struct {
@@ -143,7 +143,6 @@ IntList str_match_all(str s, str target) {
 
   return matches;
 }
-
 
 str str_skip(str s, size_t n) {
   if (n > s.len) return str_empty();
@@ -287,15 +286,34 @@ StrList str_split_lines(str s) {
 }
 
 typedef struct {
+  size_t curr;
   str s;
 } StrIter;
 
 StrIter str_iter(str s) {
-  return (StrIter) {s};
+  return (StrIter) {0, s};
 }
 
-str iter_next_line(StrIter* it) {
-  int i = str_find(it->s, '\n');
+bool str_iter_at_end(StrIter it) {
+  return it->s.len == 0;
+}
+
+int str_iter_match(StrIter* it, str target) {
+  int match = str_match(it->s, target);
+  if (match == -1) {
+    it->curr += it->s.len;
+    it->s = str_empty();
+    return match;
+  } else {
+    int curr = it->curr;
+    it->curr += match+1;
+    it->s = str_skip(it->s, match+1);
+    return curr + match;
+  }
+}
+
+str str_iter_split_char(StrIter* it, char c) {
+  int i = str_find(it->s, c);
   if (i == -1) {
     str res = it->s;
     it->s = str_empty();
@@ -307,9 +325,23 @@ str iter_next_line(StrIter* it) {
   }
 }
 
-bool iter_at_end(StrIter* it) {
-  return it->s.len == 0;
+str str_iter_split_match(StrIter* it, str pattern) {
+  int i = str_match(it->s, pattern);
+  if (i == -1) {
+    str res = it->s;
+    it->s = str_empty();
+    return res;
+  } else {
+    str res = str_take(it->s, i);
+    it->s = str_skip(it->s, i+pattern.len);
+    return res;
+  }
 }
+
+str str_iter_line(StrIter* it) {
+  return str_iter_split_char(it, '\n');
+}
+
 
 //////////////////////
 
