@@ -131,7 +131,7 @@ void list_name##_append_array(list_name* l, type* arr, size_t arr_len) { \
   l->len += arr_len; \
 } \
  \
-void list_name##_free(list_name* l) { \
+void list_name##_drop(list_name* l) { \
   free(l->data); \
   l->cap = 0; \
   l->len = 0; \
@@ -260,7 +260,7 @@ void list_append_array(List<T>* l, T* arr, size_t arr_len) {
   l->len += arr_len;
 }
 
-void list_free(List<T>* l) {
+void list_drop(List<T>* l) {
   free(l->data);
   l->cap = 0;
   l->len = 0;

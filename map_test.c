@@ -54,5 +54,5 @@ int main() {
     else printf("Bucket %d removed\n", i);
   }
 
-  IntMap_free(&m);
+  IntMap_drop(&m);
 }

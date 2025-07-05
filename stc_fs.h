@@ -82,15 +82,12 @@ char* file_read_to_string(char* path) {
 char* path_filename(char* path) {
   char* unix = strrchr(path, '/');
   char* wind = strrchr(path, '\\');
+  if (unix == NULL && wind == NULL) return path;
 
   #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
-  if (unix == NULL && wind == NULL) return path;
   char* res = MAX(unix, wind);
-
-  return res + 1;
-
   #undef MAX
+  return res + 1;
 }
 
 char* path_filename_ext(char* path) {
@@ -114,7 +111,7 @@ static void perror_windows(const char* msg) {
   if (len == 0) {
     fprintf(stderr, "%s: couldn't get error message from Windows for error ID %d\n", msg, err);
   } else {
-    while (len >= 0 && isspace(buf[len-1])) buf[len--]  = '\0';
+    while (len >= 0 && isspace(buf[len-1])) buf[len--] = '\0';
     fprintf(stderr, "%s: %s\n", msg, buf);
   }
 }
@@ -134,6 +131,13 @@ typedef struct {
 } DirEntry;
 
 list_def(DirEntry, DirEntries)
+
+void DirEntries_free(DirEntries* entries) {
+  listforeach(DirEntry, e, entries) {
+    free(e->name);
+  }
+  free(entries->data);
+}
 
 FileType file_type(char* path) {
   #ifndef _WIN32
@@ -292,6 +296,7 @@ char* dir_current() {
 }
 
 bool dir_make_if_not_exists(char* path) {
+  // TODO: is dir_exists check redundant?
   if (dir_exists(path)) return true;
   
   #ifndef _WIN32
@@ -306,17 +311,6 @@ bool dir_make_if_not_exists(char* path) {
   #endif
 }
 
-/*
-  enum OpenOptions {
-    OpenRead,
-    OpenWrite,
-    OpenAppend,
-    OpenTruncate,
-    OpenCreate,
-    OpenCreateNew,
-  }
-*/
-// struct FileMetadata;
 
 // ?? nob_file_metadata(const char *path, bool follow_links);
 // bool nob_mkdir_if_not_exists_recursive(const char *path);
@@ -326,7 +320,8 @@ bool dir_make_if_not_exists(char* path) {
 // bool nob_write_file(const char *path, const void *data, size_t size);
 // bool nob_write_entire_file(const char *path, const void *data, size_t size);
 
-bool dir_remove_if_exists(char* path) {
+bool dir_delete_if_exists(char* path) {
+  // TODO: is dir_exists check redundant?
   if (!dir_exists(path)) return true;
   
   #ifndef _WIN32

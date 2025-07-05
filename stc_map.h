@@ -10,6 +10,8 @@
 char* const MAP_ENTRY_EMPTY   = (char*) 0;
 char* const MAP_ENTRY_REMOVED = (char*) 1;
 
+// TODO: map iterator
+
 // Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
 // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
 // long fnv_1a(char* key) {
@@ -167,7 +169,7 @@ bool name##_remove(name* m, char* key) { \
   } \
 } \
  \
-void name##_free(name* m) { \
+void name##_drop(name* m) { \
   /* keys are owned, free them */ \
   for (int i=0; i<m->cap; ++i) { \
     char* key = m->entries[i].key; \
@@ -300,7 +302,7 @@ void name##_free(name* m) { \
     return (double) m.len / (double) m.cap;
   }
 
-  void map_free(Map<T>* m) {
+  void map_drop(Map<T>* m) {
     // keys are owned, free them
     for (int i=0; i<m->cap; ++i) {
       char* key = m->entries[i].key;
