@@ -82,21 +82,11 @@ char* file_read_to_string(char* path) {
 }
 
 char* path_filename(char* path) {
-<<<<<<< HEAD
-  char* unix = strrchr(path, '/');
-  char* wind = strrchr(path, '\\');
-  if (unix == NULL && wind == NULL) return path;
-
-  #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-  char* res = MAX(unix, wind);
-  #undef MAX
-=======
   char* unix_path = strrchr(path, '/');
   char* wind_path = strrchr(path, '\\');
   if (unix_path == NULL && wind_path == NULL) return path;
   
   char* res = unix_path > wind_path ? unix_path : wind_path;
->>>>>>> 6953e61564533664183eb8a9704b7718524e2c8b
   return res + 1;
 }
 

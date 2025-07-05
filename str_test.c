@@ -39,6 +39,7 @@ int main() {
   str_dbg(str_skip(s, 6));
   str_dbg(str_skip(s, s.len-1));
   str_dbg(str_skip(s, s.len));
+  str_dbg(str_skip(s, s.len+1));
 
   str_dbg(str_skip_rev(s, 1));
   str_dbg(str_skip_rev(s, 6));
@@ -47,10 +48,10 @@ int main() {
 
   str_dbg(str_skip_while(s, isalpha));
   str_dbg(str_skip_while_rev(s, isalpha));
-    str_dbg(str_skip_while(s, isdigit));
+  str_dbg(str_skip_while(s, isdigit));
   str_dbg(str_skip_while_rev(s, isdigit));
 
-  str_dbg(str_skip_until_char(s, 'W'));
+  str_dbg(str_skip_until_char(s, 'r'));
   str_dbg(str_skip_until_match(s, str_from_cstr("World")));
 
   printf("\n");
@@ -85,7 +86,7 @@ int main() {
   res_dbg(str_parse_int(str_from_cstr("a1234")));
   res_dbg(str_parse_int(str_from_cstr("1234a")));
 
-  // StrList ss1 = str_split_match(str_from_cstr("abc,,bcd,cde,defg"), str_from_cstr(","));
+  // StrList ss1 = str_split(str_from_cstr("abc,,bcd,cde,defg"), str_from_cstr(","));
   StrList ss1 = str_split_char(str_from_cstr("abc,,bcd,cde,defg"), ',');
   listforeach(str, s, &ss1) {
     str_dbg(*s);
@@ -98,7 +99,7 @@ int main() {
   }
   printf("\n");
 
-  StrList ss3 = str_split_match(str_from_cstr("abcbbccbcd"), str_from_cstr("bc"));
+  StrList ss3 = str_split(str_from_cstr("abcbbccbcd"), str_from_cstr("bc"));
   listforeach(str, s, &ss3) {
     str_dbg(*s);
   }
@@ -107,30 +108,30 @@ int main() {
   String ls = {0};
   String_append_cstr(&ls, " kys faggot");
   str_dbg(ls);
-  ls.len = 0;
+  // ls.len = 0;
   String_append_str(&ls, str_from_cstr(" kys faggot"));
   str_dbg(ls);
 
-  str_dbg(str_replace(s, str_from_cstr("Hello"), str_from_cstr("Bye")));
-  str_dbg(str_replace(s, str_from_cstr("Hello"), str_from_cstr("ByeBye")));
+  str_dbg(str_replace(&ls, s, str_from_cstr("Hello"), str_from_cstr("Bye")));
+  str_dbg(str_replace(&ls, s, str_from_cstr("Hello"), str_from_cstr("ByeBye")));
 
-  str_dbg(str_replace_all(s, str_from_cstr("l"), str_from_cstr("Bye")));
-  str_dbg(str_replace_all(s, str_from_cstr("l"), str_from_cstr("ByeBye")));
+  str_dbg(str_replace_all(&ls, s, str_from_cstr("l"), str_from_cstr("Bye")));
+  str_dbg(str_replace_all(&ls, s, str_from_cstr("l"), str_from_cstr("ByeBye")));
 
-  str_dbg(str_to_upper(String_to_str(ls)));
-  str_dbg(str_to_lower(String_to_str(ls)));
+  str_dbg(str_to_upper(&ls, String_to_str(ls)));
+  str_dbg(str_to_lower(&ls, String_to_str(ls)));
 
   str_dbg(str_concat(String_from_cstr("hello "), String_from_cstr("world...?")));
-  str_dbg(str_repeat(str_from_cstr("hello "), 5));
+  str_dbg(str_repeat(&ls, str_from_cstr("hello "), 5));
 
   StrList sl = {0};
-  StrList_push(&sl, str_from_cstr("ciao"));
-  StrList_push(&sl, str_from_cstr("ciao"));
-  StrList_push(&sl, str_from_cstr("ciao"));
+  StrList_push(&sl, str_from_cstr("ciao1"));
+  StrList_push(&sl, str_from_cstr("ciao2"));
+  StrList_push(&sl, str_from_cstr("ciao3"));
 
-  str_dbg(str_join(sl, str_from_cstr(", ")));
+  str_dbg(str_join(&ls, str_from_cstr(", "), sl));
 
-  str_dbg(String_format("Kys %d times stupid faggot %s", 100, "killer"));
-  str_dbg(int_to_str(20));
-  str_dbg(float_to_str(20.23));
+  str_dbg(String_format(&ls, "Kys %d times stupid faggot %s", 100, "killer"));
+  str_dbg(int_to_str(&ls, 20));
+  str_dbg(float_to_str(&ls, 20.23));
 }
