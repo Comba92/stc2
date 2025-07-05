@@ -9,10 +9,18 @@
 #include <ctype.h>
 #include <assert.h>
 
+// TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   size_t len;
   char* data;
 } str;
+
+#define TMP_BUF_LEN 2048
+static char tmp_buf[TMP_BUF_LEN];
+
+#define str_fmt "%.*s"
+#define str_arg(s) (int) (s).len, (s).data
+#define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
 
 char* str_to_cstr(str s) {
   char* res = malloc(s.len + 1);
@@ -21,9 +29,17 @@ char* str_to_cstr(str s) {
   return res;
 }
 
+str str_clone(str s) {
+  char* cloned = malloc(s.len);
+  memcpy(cloned, s.data, s.len);
+  return (str) { s.len, cloned };
+}
+
 str str_from_cstr(char* s) {
   return (str) { strlen(s), s };
 }
+
+#define STR(cstr) str_from_cstr((cstr))
 
 str str_from_cstr_unchecked(char* s, size_t len) {
   return (str) { len, s };
@@ -35,10 +51,9 @@ bool str_is_empty(str s) {
   return s.data == NULL || s.len == 0;
 }
 
-// TODO: handle negative indexes (back of string)
 str str_slice(str s, size_t start, size_t end) {
-  if (start >= end) return STR_EMPTY;
   // assert(start <= end && "str_slice(): start must be smaller than end");
+  if (start >= end) return STR_EMPTY;
 
   #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
   start = MIN(start, s.len);
@@ -97,7 +112,7 @@ int str_match(str s, str target) {
   if (target.len > s.len) return -1;
   str window = str_slice(s, 0, target.len);
 
-  for(int i=0; i <= s.len - target.len; ++i) {
+  for(size_t i=0; i <= s.len - target.len; ++i) {
     if (str_eq(window, target)) return i;
     window.data += 1;
   }
@@ -109,7 +124,7 @@ IntList str_match_all(str s, str target) {
   IntList matches = {0};
   str window = str_slice(s, 0, target.len);
 
-  for (int i=0; i <= s.len - target.len; ++i) {
+  for (size_t i=0; i <= s.len - target.len; ++i) {
     if (str_eq(window, target)) {
       IntList_push(&matches, i);
     }
@@ -164,34 +179,41 @@ str str_take_until_match(str s, str target) {
 }
 
 typedef int (*CharPredicate)(int val);
-size_t str_match_while(str s, CharPredicate p) {
-  listfor(size_t, i, &s) {
+
+int str_advance_while(str s, CharPredicate p) {
+  listfor(int, i, &s) {
     if (!p(s.data[i])) return i;
   }
-  return s.len-1;
+  return s.len;
 }
-size_t str_match_while_rev(str s, CharPredicate p) {
-  listforrev(size_t, i, &s) {
+int str_advance_while_not(str s, CharPredicate p) {
+  listfor(int, i, &s) {
+    if (p(s.data[i])) return i;
+  }
+  return s.len;
+}
+int str_advance_while_rev(str s, CharPredicate p) {
+  listforrev(int, i, &s) {
     if (!p(s.data[i])) return s.len-1 - i;
   }
-  return s.len-1;
+  return s.len;
 }
 
 str str_skip_while(str s, CharPredicate p) {
-  int match = str_match_while(s, p);
+  int match = str_advance_while(s, p);
   return str_skip(s, match);
 }
 str str_skip_while_rev(str s, CharPredicate p) {
-  int match = str_match_while_rev(s, p);
+  int match = str_advance_while_rev(s, p);
   return str_skip_rev(s, match);
 }
 
 str str_take_while(str s, CharPredicate p) {
-  int match = str_match_while(s, p);
+  int match = str_advance_while(s, p);
   return str_take(s, match);
 }
 str str_take_while_rev(str s, CharPredicate p) {
-  int match = str_match_while_rev(s, p);
+  int match = str_advance_while_rev(s, p);
   return str_take_rev(s, match);
 }
 
@@ -206,31 +228,28 @@ bool str_ends_with(str s, str end) {
 }
 
 str str_trim_start(str s) {
-  return str_skip_while(s, isblank);
+  return str_skip_while(s, isspace);
 }
 str str_trim_end(str s) {
-  return str_skip_while_rev(s, isblank);
+  return str_skip_while_rev(s, isspace);
 }
 str str_trim(str s) {
   return str_trim_end(str_trim_start(s));
 }
 
-#define PARSE_BUF_LEN 1024
-static char parse_buf[PARSE_BUF_LEN];
-
 int str_parse_int(str s) {
-  assert(s.len+1 < PARSE_BUF_LEN && "str_parse_int(): number string exceeds temporary buffer size");
-  memcpy(parse_buf, s.data, s.len);
-  parse_buf[s.len + 1] = '\0';
-  int n = atoi(parse_buf);
+  assert(s.len+1 < TMP_BUF_LEN && "str_parse_int(): number string exceeds temporary buffer size");
+  memcpy(tmp_buf, s.data, s.len);
+  tmp_buf[s.len + 1] = '\0';
+  int n = atoi(tmp_buf);
   return n;
 }
 
 double str_parse_float(str s) {
-  assert(s.len < PARSE_BUF_LEN && "str_parse_float(): number string exceeds temporary buffer size");
-  memcpy(parse_buf, s.data, s.len);
-  parse_buf[s.len + 1] = '\0';
-  int n = atof(parse_buf);
+  assert(s.len < TMP_BUF_LEN && "str_parse_float(): number string exceeds temporary buffer size");
+  memcpy(tmp_buf, s.data, s.len);
+  tmp_buf[s.len + 1] = '\0';
+  int n = atof(tmp_buf);
   return n;
 }
 
@@ -267,20 +286,43 @@ StrList str_split(str s, str pattern) {
   return ss;
 }
 
+StrList str_split_when(str s, CharPredicate pred) {
+  StrList ss = {0};
+
+  while (s.len > 0) {
+    int i = str_advance_while_not(s, pred);
+    StrList_push(&ss, str_take(s, i));
+    s = str_skip(s, i);
+    i = str_advance_while(s, pred);
+    s = str_skip(s, i);
+  }
+
+  return ss;
+}
+
 StrList str_lines(str s) {
   return str_split_char(s, '\n');
 }
 
+StrList str_words(str s) {
+  return str_split_when(s, isspace);
+}
+
+//////////////////////
+
+// TODO: iterators aren't fleshed out yet
 typedef struct {
   size_t curr;
   str s;
 } StrIter;
 
+#define iterfor(name, s) for(StrIter name = str_iter((s)); !str_iter_done(name); )
+
 StrIter str_iter(str s) {
   return (StrIter) {0, s};
 }
 
-bool str_iter_at_end(StrIter it) {
+bool str_iter_done(StrIter it) {
   return it.s.len == 0;
 }
 
@@ -311,7 +353,7 @@ str str_iter_split_char(StrIter* it, char c) {
   }
 }
 
-str str_iter_split_match(StrIter* it, str pattern) {
+str str_iter_split(StrIter* it, str pattern) {
   int i = str_match(it->s, pattern);
   if (i == -1) {
     str res = it->s;
@@ -324,8 +366,21 @@ str str_iter_split_match(StrIter* it, str pattern) {
   }
 }
 
+str str_iter_split_when(StrIter* it, CharPredicate pred) {
+  int i = str_advance_while_not(it->s, pred);
+  str res = str_take(it->s, i);
+  it->s = str_skip(it->s, i);
+  i = str_advance_while(it->s, pred);
+  it->s = str_skip(it->s, i);
+  return res;
+}
+
 str str_iter_line(StrIter* it) {
   return str_iter_split_char(it, '\n');
+}
+
+str str_iter_word(StrIter* it) {
+  return str_iter_split_when(it, isspace);
 }
 
 
@@ -339,6 +394,7 @@ str String_to_str(String sb) {
     .data = sb.data,
   };
 }
+#define STRB(sb) String_to_str(sb)
 
 // str String_to_owned_str(String* sb) {
 //   char* s = malloc(sb->len);
@@ -382,24 +438,22 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
 
-#define FMT_BUF_LEN 2048
-static char fmt_buf[FMT_BUF_LEN];
 String String_format(String* sb, char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  int real_size = vsnprintf(fmt_buf, FMT_BUF_LEN, fmt, args);
+  int real_size = vsnprintf(tmp_buf, TMP_BUF_LEN, fmt, args);
   va_end(args);
 
-  if (real_size > FMT_BUF_LEN) {
+  if (real_size > TMP_BUF_LEN) {
     fprintf(stderr, 
       "String_format(): fmt_buf size is not big enough: size is %d, should have written %d",
-      FMT_BUF_LEN,
+      TMP_BUF_LEN,
       real_size
     );
   }
 
   sb->len = 0;
-  String_append_cstr(sb, fmt_buf);
+  String_append_cstr(sb, tmp_buf);
   return *sb;
 }
 
@@ -499,16 +553,13 @@ String str_join(String* sb, str join, StrList strs) {
   return *sb;
 }
 
-String str_join_two(String* sb, str join, str a, str b) {
-  sb->len = 0;
-  String_reserve(sb, a.len + b.len + join.len);
-  String_append_str(sb, a);
-  String_append_str(sb, join);
-  String_append_str(sb, b);
-  return *sb;
-}
-
-#define str_fmt "%.*s"
-#define str_arg(s) (int) (s).len, (s).data
+// String str_join_two(String* sb, str join, str a, str b) {
+//   sb->len = 0;
+//   String_reserve(sb, a.len + b.len + join.len);
+//   String_append_str(sb, a);
+//   String_append_str(sb, join);
+//   String_append_str(sb, b);
+//   return *sb;
+// }
 
 #endif

@@ -59,7 +59,7 @@ void list_name##_assert(list_name l, size_t i) { \
  \
 typedef bool (*list_name##CmpFn)(type a, type b); \
 int list_name##_find(list_name* l, type value, list_name##CmpFn pred) { \
-  for(size_t i=0; i<l->len; ++i) { \
+  for(int i=0; i<l->len; ++i) { \
     if (pred(l->data[i], value)) return i; \
   } \
  \
@@ -69,7 +69,7 @@ int list_name##_find(list_name* l, type value, list_name##CmpFn pred) { \
 typedef bool (*list_name##FilterFn)(type val); \
 void list_name##_filter(list_name* l, list_name##FilterFn pred) { \
   size_t curr = 0; \
-  for(size_t i=0; i < l->len; ++i) { \
+  for(int i=0; i < l->len; ++i) { \
     if (pred(l->data[i])) { \
       l->data[curr++] = l->data[i]; \
     } \

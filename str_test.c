@@ -1,7 +1,6 @@
 #include "stc_str.h"
 #include <stdio.h>
 
-#define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
 #define res_dbg(s) printf("%d > " #s "\n", (int) (s));
 
 int main() {
@@ -24,8 +23,8 @@ int main() {
 
   res_dbg(str_find(s, 'W'));
   res_dbg(str_contains(s, 'W'));
-  res_dbg(str_match_while(s, isupper));
-  res_dbg(str_match_while_rev(s, isupper));
+  res_dbg(str_advance_while(s, isupper));
+  res_dbg(str_advance_while_rev(s, isupper));
   
   printf("\n");
 
@@ -105,6 +104,15 @@ int main() {
   }
   printf("\n");
 
+  StrList ss4 = str_words(str_from_cstr("This is the 100th Etext file presented by Project Gutenberg, and\n"
+"is presented in cooperation with World Library, Inc., from their\n"
+"Library  of  the Future and Shakespeare CDROMS.  Project Gutenberg\n"
+"often releases Etexts that are NOT placed in the Public Domain!!     "));
+  listforeach(str, s, &ss4) {
+    str_dbg(*s);
+  }
+  printf("\n");
+
   String ls = {0};
   String_append_cstr(&ls, " kys faggot");
   str_dbg(ls);
@@ -134,4 +142,16 @@ int main() {
   str_dbg(String_format(&ls, "Kys %d times stupid faggot %s", 100, "killer"));
   str_dbg(int_to_str(&ls, 20));
   str_dbg(float_to_str(&ls, 20.23));
+
+  iterfor(it, str_from_cstr("abc\nbcd\ncde\ndefg")) {
+    str line = str_iter_line(&it);
+    str_dbg(line);
+  }
+
+  iterfor(it, str_from_cstr("abc,,bcd,cde,defg")) {
+    str split = str_iter_split(&it, str_from_cstr(","));
+    str_dbg(split);
+  }
+
+  printf("Done\n");
 }

@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include "stc_list.h"
 #include <errno.h>
+#include "stc_list.h"
 
 #ifndef _WIN32
   #include <dirent.h>
@@ -71,7 +71,7 @@ char* file_read_to_string(char* path) {
   }
 
   char* buf = malloc(file_size);
-  size_t read = fread(buf, 1, file_size, f);
+  int read = fread(buf, 1, file_size, f);
   if (read != file_size) {
     perror("Couldn't read whole file");
   }
@@ -109,9 +109,9 @@ static void perror_windows(const char* msg) {
   );
 
   if (len == 0) {
-    fprintf(stderr, "%s: couldn't get error message from Windows for error ID %d\n", msg, err);
+    fprintf(stderr, "%s: couldn't get error message from Windows for error ID %ld\n", msg, err);
   } else {
-    while (len >= 0 && isspace(buf[len-1])) buf[len--] = '\0';
+    while (len > 0 && isspace(buf[len-1])) buf[len--] = '\0';
     fprintf(stderr, "%s: %s\n", msg, buf);
   }
 }
