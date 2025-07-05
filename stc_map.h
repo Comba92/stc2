@@ -11,21 +11,8 @@ char* const MAP_ENTRY_EMPTY   = (char*) 0;
 char* const MAP_ENTRY_REMOVED = (char*) 1;
 
 // TODO: map iterator
+// TODO: clean up this code for god's sake, also might have bugs
 
-// Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
-// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-long fnv_1a(char* s, size_t len) {
-  const unsigned long long FNV_OFFSET = 14695981039346656037UL;
-  const unsigned long long FNV_PRIME = 1099511628211UL;
-
-  long hash = FNV_OFFSET;
-  for (char* c = s; len > 0; c++, len--) {
-    hash ^= (unsigned long) *c;
-    hash *= FNV_PRIME;
-  }
-
-  return hash;
-}
 
 // https://theartincode.stanis.me/008-djb2/
 long djb2(char *s, size_t len)
@@ -41,8 +28,19 @@ long djb2(char *s, size_t len)
   return hash;
 }
 
-long map_hash_key(str key) {
-  return djb2(key.data, key.len);
+size_t map_hash_key(str key, size_t cap) {
+  /*
+    invariant: capacity is always multiple of two;
+    "hash % map->cap" can be rewritten as a logical AND, avoiding division
+  */
+  size_t hash = djb2(key.data, key.len);
+  return hash & (cap - 1);
+}
+
+size_t map_next_hash(size_t h, size_t i, size_t cap) {
+  // size_t hash = (h + 1); // linear probing
+  size_t hash = (h + i*i); // quadratic probing
+  return hash & (cap - 1);
 }
 
 bool map_key_is_empty(str key) {
@@ -67,22 +65,18 @@ typedef struct { \
   size_t collisions; \
   size_t last_insert_collisions; \
   size_t biggest_collision_chain; \
+  size_t collision_chain_avg; \
 } name; \
  \
 name##Entry* name##_search(name m, str key) { \
-  size_t hash = map_hash_key(key); \
-  /* \
-    invariant: capacity is always multiple of two; \
-    "hash % map->cap" can be rewritten as a logical AND, avoiding division \
-  */ \
-  size_t i = hash & (m.cap-1); \
+  size_t i = map_hash_key(key, m.cap); \
   name##Entry* e = &m.entries[i]; \
  \
-  int retries = 0; \
+  size_t retries = 0; \
   while (!map_key_is_marker(e->key)) { \
     if (retries >= m.len) return NULL; \
     if (str_cmp(e->key, key) == 0) return e; \
-    i = (i+1) & (m.cap-1); \
+    i = map_next_hash(i, retries+1, m.cap); \
     e = &m.entries[i]; \
     retries += 1; \
   } \
@@ -91,18 +85,18 @@ name##Entry* name##_search(name m, str key) { \
 } \
  \
 name##Entry* name##_search_for_insert(name* m, str key) { \
-  size_t hash = map_hash_key(key); \
-  size_t i = hash & (m->cap-1); \
+  size_t i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
  \
-  size_t collisions = 0; \
-  while (!map_key_is_marker(e->key)) { \
+  size_t retries = 0; \
+  while (!map_key_is_empty(e->key)) { \
     if (str_cmp(e->key, key) == 0) return e; \
-    i = (i+1) & (m->cap-1); \
+    i = map_next_hash(i, retries+1, m->cap); \
     e = &m->entries[i]; \
-    collisions += 1; \
+    retries += 1; \
   } \
-  m->last_insert_collisions = collisions; \
+  m->last_insert_collisions = retries; \
+  m->collision_chain_avg += retries; \
  \
   return e; \
 } \

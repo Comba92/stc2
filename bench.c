@@ -17,7 +17,7 @@ int main() {
   // printf("File words count = %lld\n", count);
 
   IntMap map = {0};
-  int count = 0;
+  // int count = 0;
   listforeach(str, word, &words) {
     // printf("i = %d, len = %lld\t", count++, map.len); str_dbg(*word);
     int* wcount = IntMap_get(map, *word);
@@ -26,5 +26,6 @@ int main() {
   }
 
   printf("Map len: %lld\n", map.len);
-  printf("Collisions: %lld - Longest collision chain: %lld\n", map.collisions_count, map.biggest_collision_chain);
+  printf("Collisions: %lld - Longest collision chain: %lld\n", map.collisions, map.biggest_collision_chain);
+  printf("Average collision chain length: %f", (double) map.collision_chain_avg / (double) map.collisions);
 }

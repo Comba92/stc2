@@ -56,5 +56,7 @@ int main() {
     else printf("Bucket %d removed\n", i);
   }
 
+  printf("Buckets: %lld, Collisions count: %lld - Biggest collision: %lld\n", m.len, m.collisions, m.biggest_collision_chain);
+
   IntMap_drop(&m);
 }
