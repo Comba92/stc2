@@ -188,10 +188,9 @@ str path_parent(char* path) {
   return str_from_cstr_unchecked(path, parent_start - path);
 }
 
-char* path_absolute(char* path) {
+char* path_to_absolute(char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
-  // TODO: should path be prefixed with "./" for realpath to work?
   char* res = realpath(path, NULL);
   if (res == NULL) perror("Couldn't get absolute path");
   return res;
@@ -361,6 +360,7 @@ DirEntry dir_read(DirRead* it) {
   }
 
   entry.name = dp->d_name;
+  entry.parent = path_to_absolute(entry.name);
   switch (statbuf.st_mode & S_IFMT) {
     case S_IFREG: entry.type = FileType_File; break;
     case S_IFDIR: entry.type = FileType_Dir; break;
@@ -386,6 +386,7 @@ DirEntry dir_read(DirRead* it) {
   } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
 
   entry.name = strdup(filename);
+  entry.parent = path_to_absolute(entry.name);
   switch (data.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
     default: entry.type = FileType_File; break;
@@ -415,9 +416,6 @@ void DirEntries_free(DirEntries* entries) {
 DirEntries dir_read_collect(char* dirpath) {
   DirEntries entries = {0};
   DirEntry entry = {0};
-  entry.parent = dirpath;
-
-  // TODO: fetch full path as parent
 
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -445,6 +443,7 @@ DirEntries dir_read_collect(char* dirpath) {
     }
 
     entry.name = dp->d_name;
+    entry.parent = path_to_absolute(entry.name);
     switch (statbuf.st_mode & S_IFMT) {
       case S_IFREG: entry.type = FileType_File; break;
       case S_IFDIR: entry.type = FileType_Dir; break;
@@ -493,6 +492,7 @@ DirEntries dir_read_collect(char* dirpath) {
     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
 
     entry.name = strdup(filename);
+    entry.parent = path_to_absolute(entry.name);
     switch (data.dwFileAttributes) {
       case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
       default: entry.type = FileType_File; break;
@@ -625,6 +625,34 @@ bool dir_create_recursive(char* path) {
 
   StrList_drop(&components);
   return !had_error;
+}
+
+void dir_walk(char* dirpath) {
+  DirRead it = dir_open(dirpath);
+  DirEntry e = dir_read(&it);
+  
+  String sb = {0};
+  String_append_cstr(&sb, dirpath);
+  str_dbg(sb);
+
+  while (e.name != NULL) {
+    switch (e.type) {
+      case FileType_Dir: {
+        printf("Reading %s\n", e.name);
+        String_append_null(&sb);
+        str_dbg(sb);
+        String_format(&sb, "hello %s %s %s", sb.data, e.name, sb.data);
+        str_dbg(sb);
+        printf("%s\n", e.name);
+        // dir_walk(sb.data); 
+      } break;
+      default: printf("File: %s/%s\n", sb.data, e.name); break;
+    }
+
+    e = dir_read(&it);
+  }
+
+  dir_close(&it);
 }
 
 // ?? nob_file_metadata(const char *path, bool follow_links);

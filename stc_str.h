@@ -480,27 +480,30 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
 
-
+static String tmp_sb = {0};
 String String_format(String* sb, char* fmt, ...) {
+  // TODO: this is buggy af
   va_list args;
   va_start(args, fmt);
   int real_size = vsnprintf(NULL, 0, fmt, args);
   va_end(args);
 
   // real_size excludes null
-  String_reserve(sb, real_size+1);
+  String_reserve(&tmp_sb, real_size+1);
   
+  tmp_sb.len = 0;
   va_start(args, fmt);
   // should write_real_size + null
-  vsnprintf(sb->data, real_size+1, fmt, args);
+  vsnprintf(tmp_sb.data, real_size+1, fmt, args);
   va_end(args);
   
-  sb->len = real_size;
+  str_dbg(tmp_sb);
+  sb->len = 0;
+  String_append(sb, tmp_sb);
   return *sb;
 }
 
 
-static String tmp_sb = {0};
 
 int str_parse_int(str s) {
   String_reserve(&tmp_sb, s.len+1);

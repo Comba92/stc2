@@ -11,19 +11,22 @@ int main() {
 
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
-    printf("%s/%s %d\n", e->parent, e->name, e->type);
+    printf("%s\t%s %d\n", e->parent, e->name, e->type);
   }
 
+  
   printf("\nDir iterator\n");
   DirRead it = dir_open(".");
   DirEntry e = {0};
   do {
     e = dir_read(&it);
-    printf("%s/%s %d\n", e.parent, e.name, e.type);
+    printf("%s\t%s %d\n", e.parent, e.name, e.type);
   } while (e.name != NULL);
   dir_close(&it);
-
-  dir_read_collect("/home/comba");
+  
+  dir_read_collect("/home/comba/");
+  dir_read_collect("..");
+  dir_walk(".");
 
   printf("%d\n", file_exists("./test.txt"));
   printf("%d\n", file_exists("./faggot_killer.txt"));
@@ -48,6 +51,6 @@ int main() {
   printf("Rename FAIL: %d\n", file_move("./test4.txt", "./kys.txt"));
   printf("Create FAIL: %d\n", file_create_if_not_exists("kys.txt"));
 
-  printf("Absolute path: %s\n", path_absolute("kys.txt"));
+  printf("Absolute path: %s\n", path_to_absolute("kys.txt"));
   str_dbg(path_parent("./dada/dasdad/.weqrwq.rwq/rqwr.q/kys.txt"));
 }
