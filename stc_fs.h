@@ -61,6 +61,9 @@ bool file_close(FILE* f) {
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
 char* file_read_to_string(char* path) {
   FILE* f = file_open_read(path);
+  if (f == NULL) {
+    return NULL;
+  }
 
   if (fseek(f, 0, SEEK_END) != 0) {
     perror("Couldn't seek end of file");
@@ -235,7 +238,7 @@ bool path_is_relative(char* path) {
 // TODO: might be an iterator
 int isseparator(int c) { return c == '/' || c == '\\'; }
 StrList path_components(char* path) {
-  return str_split_when(str_from_cstr(path), isseparator);
+  return str_split_when_collect(str_from_cstr(path), isseparator);
 }
 
 // https://doc.rust-lang.org/std/path/struct.PathBuf.html
@@ -279,6 +282,7 @@ bool path_set_extension(String* sb, char* extension) {
 
 /////////////////////
 
+
 typedef enum {
   FileType_Other,
   FileType_File,
@@ -292,46 +296,123 @@ typedef struct {
   FileType type;
 } DirEntry;
 
-list_def(DirEntry, DirEntries)
-
-void DirEntries_free(DirEntries* entries) {
-  listforeach(DirEntry, e, entries) {
-    free(e->name);
-  }
-  free(entries->data);
-}
-
-FileType file_type(char* path) {
+typedef struct {
 #ifndef _WIN32
-  struct stat buf;
-  if (stat(path, &buf) != 0) {
-    perror("Couldn't open file");
-    return FileType_Other;
-  }
-  
-  switch (buf.st_mode & S_IFMT) {
-    case S_IFREG: return FileType_File;
-    case S_IFDIR: return FileType_Dir;
-    case S_IFLNK: return FileType_Link;
-    default: return FileType_Other;
-  }
+  int dir_fd;
+  DIR* dir;
 #else
-  DWORD attribs = GetFileAttributes(path);
-  if (attribs == INVALID_FILE_ATTRIBUTES) {
-    perror_windows("Couldn't open file");
-    return FileType_Other;
+  WIN32_FIND_DATA data;
+  HANDLE h;
+#endif
+  DirEntry last_entry;
+} DirRead;
+
+DirRead dir_open(char* dirpath) {
+#ifndef _WIN32
+  int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
+  // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
+  DIR* dir = fdopendir(dir_fd);
+
+  if (dir == NULL) {
+    perror("Couldn't open directory for reading entries");
   }
 
-  switch (attribs) {
-    case FILE_ATTRIBUTE_DIRECTORY: return FileType_Dir;
-    default: return FileType_File;
+  return (DirRead) { dir_fd, dir };
+#else
+  char buf[PATH_MAX_LEN];
+  snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
+
+  // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
+  WIN32_FIND_DATA data;
+  HANDLE h = FindFirstFile(buf, &data);
+  if (h == INVALID_HANDLE_VALUE) {
+    perror_windows("Couldn't open directory for reading entries");
   }
+  return (DirRead) { data, h };
 #endif
 }
 
-// TODO: consider making this an iterator instead, together with a dir_open and a dir_close.
+DirEntry dir_read(DirRead* it) {
+#ifndef _WIN32
+  DirEntry entry = {0};
+  int prev_err = errno;
+  
+  struct dirent* dp;
+  char* filename;
+  do {
+    dp = readdir(it->dir);
 
-DirEntries dir_read(char* dirpath) {
+    if (dp == NULL) {
+      if (prev_err != errno) {
+        perror("Couldn't read all directory entries");
+      }
+      return entry;
+    }
+
+    filename = dp->d_name;
+  } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
+
+  struct stat statbuf;
+  int fd = openat(it->dir_fd, filename, O_RDONLY);
+  if (fstat(fd, &statbuf) != 0) {
+    printf("Bad filename %s\n", filename);
+    perror("Couldn't read file during directory scan");
+    return entry;
+  }
+
+  entry.name = dp->d_name;
+  switch (statbuf.st_mode & S_IFMT) {
+    case S_IFREG: entry.type = FileType_File; break;
+    case S_IFDIR: entry.type = FileType_Dir; break;
+    case S_IFLNK: entry.type = FileType_Link; break;
+    default: entry.type = FileType_Other; break;
+  }
+
+  if (close(fd) != 0) {
+    perror("Couldn't close file during directory scan");
+  };
+#else
+  char* filename;
+  do {
+    bool res = FindNextFile(it->h, &it->data) != 0;
+    if (!res) {
+      if (GetLastError() != ERROR_NO_MORE_FILES) {
+        perror_windows("Couldn't read all directory entries");
+      }
+      return entry;
+    }
+
+    filename = data.cFileName;
+  } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
+
+  entry.name = strdup(filename);
+  switch (data.dwFileAttributes) {
+    case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
+    default: entry.type = FileType_File; break;
+  }
+#endif
+  return entry;
+}
+
+bool dir_close(DirRead* it) {
+#ifndef _WIN32
+  bool res = closedir(it->dir) == 0;
+  if (!res) perror("Couldn't close directory after completed scan");
+#else
+  bool res = FindClose(h) == 0;
+  if (!res) perror_windows("Coudln't close directory find");
+#endif
+  return res;
+}
+
+list_def(DirEntry, DirEntries)
+void DirEntries_free(DirEntries* entries) {
+  listforeach(DirEntry, e, entries) free(e->name);
+  free(entries->data);
+}
+
+// TODO: enable entries sorting
+DirEntries dir_read_collect(char* dirpath) {
   DirEntries entries = {0};
   DirEntry entry = {0};
   entry.parent = dirpath;
@@ -424,7 +505,9 @@ DirEntries dir_read(char* dirpath) {
     perror_windows("Couldn't read all directory entries");
   }
 
-  FindClose(h);
+  if (FindClose(h) == 0) {
+    perror_windows("Coudln't close directory find");
+  };
 #endif
 
   return entries;
@@ -440,6 +523,7 @@ bool file_exists(char* path) {
 #endif
 }
 
+
 bool dir_exists(char* path) {
 #ifndef _WIN32
   struct stat buf;
@@ -448,6 +532,34 @@ bool dir_exists(char* path) {
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesa?redirectedfrom=MSDN
   DWORD attribs = GetFileAttributes(path);
   return attribs != INVALID_FILE_ATTRIBUTES && (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#endif
+}
+
+FileType file_type(char* path) {
+#ifndef _WIN32
+  struct stat buf;
+  if (stat(path, &buf) != 0) {
+    perror("Couldn't open file");
+    return FileType_Other;
+  }
+  
+  switch (buf.st_mode & S_IFMT) {
+    case S_IFREG: return FileType_File;
+    case S_IFDIR: return FileType_Dir;
+    case S_IFLNK: return FileType_Link;
+    default: return FileType_Other;
+  }
+#else
+  DWORD attribs = GetFileAttributes(path);
+  if (attribs == INVALID_FILE_ATTRIBUTES) {
+    perror_windows("Couldn't open file");
+    return FileType_Other;
+  }
+
+  switch (attribs) {
+    case FILE_ATTRIBUTE_DIRECTORY: return FileType_Dir;
+    default: return FileType_File;
+  }
 #endif
 }
 
@@ -629,8 +741,8 @@ bool file_copy(char* src, char* dst) {
 
   // https://man7.org/linux/man-pages/man2/copy_file_range.2.html
   // https://man7.org/linux/man-pages/man2/sendfile.2.html
-  // if (sendfile(dst_fd, src_fd, NULL, src_size) == -1) {
-  if (copy_file_range(src_fd, NULL, dst_fd, NULL, src_size, 0) == -1) {
+  if (sendfile(dst_fd, src_fd, NULL, src_size) == -1) {
+  // if (copy_file_range(src_fd, NULL, dst_fd, NULL, src_size, 0) == -1) {
     perror("Couldn't copy src file to dst file");
     return false;
   }

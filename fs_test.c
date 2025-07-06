@@ -1,20 +1,29 @@
 #include "stc_fs.h"
 
 int main() {
-  printf("%s\n", file_read_to_string("test.txt"));
+  file_read_to_string("test.txt");
 
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));
   printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));
 
   DirEntries entries = {0};
-  entries = dir_read(".");
+  entries = dir_read_collect(".");
 
-  printf("Entries = %d\n", entries.len);
+  printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
     printf("%s/%s %d\n", e->parent, e->name, e->type);
   }
 
-  dir_read("/home/comba");
+  printf("\nDir iterator\n");
+  DirRead it = dir_open(".");
+  DirEntry e = {0};
+  do {
+    e = dir_read(&it);
+    printf("%s/%s %d\n", e.parent, e.name, e.type);
+  } while (e.name != NULL);
+  dir_close(&it);
+
+  dir_read_collect("/home/comba");
 
   printf("%d\n", file_exists("./test.txt"));
   printf("%d\n", file_exists("./faggot_killer.txt"));
