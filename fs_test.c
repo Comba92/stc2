@@ -4,7 +4,7 @@ int main() {
   printf("%s\n", file_read_to_string("test.txt"));
 
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));
-  printf("%s\n", path_filename_ext("D:\\code\\stc2\\str_test.c"));
+  printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));
 
   DirEntries entries = {0};
   entries = dir_read(".");
@@ -24,7 +24,7 @@ int main() {
 
   dir_make_if_not_exists("./test1");
   dir_make_if_not_exists("./test2/daaaaa/dsadasad/adasdas");
-  dir_remove_if_exists("./test1");
+  dir_delete_if_exists("./test1");
 
   printf("Working dir: %s\n", dir_current());
   printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt"));
@@ -36,4 +36,7 @@ int main() {
   printf("Delete FAIL: %d\n", file_delete("./test4.txt"));
   printf("Rename FAIL: %d\n", file_move("./test4.txt", "./kys.txt"));
   printf("Create FAIL: %d\n", file_create_if_not_exists("kys.txt"));
+
+  printf("Absolute path: %s\n", path_absolute("kys.txt"));
+  str_dbg(path_parent("./dada/dasdad/.weqrwq.rwq/rqwr.q/kys.txt"));
 }

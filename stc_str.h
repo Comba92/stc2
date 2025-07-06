@@ -96,10 +96,6 @@ int str_find(str s, char c) {
 }
 
 int str_find_rev(str s, char c) {
-  // for (int i=s.len-1; i >= 0; --i) {
-  //   if (s.data[i] == c) return i;
-  // }
-  // return -1;
   char* res = strrchr(s.data, c);
   return res != NULL ? res - s.data : -1;
 }
@@ -157,6 +153,11 @@ str str_skip_until_char(str s, char c) {
   if (idx == -1) return STR_EMPTY;
   return str_skip(s, idx);
 }
+str str_skip_rev_until_char(str s, char c) {
+  int idx = str_find_rev(s, c);
+  if (idx == -1) return STR_EMPTY;
+  return str_take(s, idx);
+}
 
 str str_take_rev(str s, size_t n) {
   // check neccessary; overflow otherwise
@@ -167,6 +168,11 @@ str str_take_until_char(str s, char c) {
   int idx = str_find(s, c);
   if (idx == -1) return s;
   return str_take(s, idx);
+}
+str str_take_rev_until_char(str s, char c) {
+  int idx = str_find_rev(s, c);
+  if (idx == -1) return s;
+  return str_skip(s, idx);
 }
 
 str str_skip_until_match(str s, str target) {
@@ -192,7 +198,7 @@ int str_advance_while_not(str s, CharPredicate p) {
   }
   return s.len;
 }
-int str_advance_while_rev(str s, CharPredicate p) {
+int str_advance_rev_while(str s, CharPredicate p) {
   listforrev(int, i, &s) {
     if (!p(s.data[i])) return s.len-1 - i;
   }
@@ -203,8 +209,8 @@ str str_skip_while(str s, CharPredicate p) {
   int match = str_advance_while(s, p);
   return str_skip(s, match);
 }
-str str_skip_while_rev(str s, CharPredicate p) {
-  int match = str_advance_while_rev(s, p);
+str str_skip_rev_while(str s, CharPredicate p) {
+  int match = str_advance_rev_while(s, p);
   return str_skip_rev(s, match);
 }
 
@@ -212,8 +218,8 @@ str str_take_while(str s, CharPredicate p) {
   int match = str_advance_while(s, p);
   return str_take(s, match);
 }
-str str_take_while_rev(str s, CharPredicate p) {
-  int match = str_advance_while_rev(s, p);
+str str_take_rev_while(str s, CharPredicate p) {
+  int match = str_advance_rev_while(s, p);
   return str_take_rev(s, match);
 }
 
@@ -227,11 +233,21 @@ bool str_ends_with(str s, str end) {
   return str_eq(postfix, end);
 }
 
+str str_strip_prefix(str s, str prefix) {
+  if (str_starts_with(s, prefix)) return str_take(s, prefix.len);
+  else return s;
+}
+
+str str_strip_postfix(str s, str postfix) {
+  if (str_ends_with(s, postfix)) return str_skip(s, postfix.len);
+  else return s;
+}
+
 str str_trim_start(str s) {
   return str_skip_while(s, isspace);
 }
 str str_trim_end(str s) {
-  return str_skip_while_rev(s, isspace);
+  return str_skip_rev_while(s, isspace);
 }
 str str_trim(str s) {
   return str_trim_end(str_trim_start(s));
@@ -311,6 +327,9 @@ StrList str_words(str s) {
 //////////////////////
 
 // TODO: iterators aren't fleshed out yet
+// IDEA: each iterator should a different struct, method just makes the struct
+// each struct has a next method
+
 typedef struct {
   size_t curr;
   str s;

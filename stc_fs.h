@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include "stc_list.h"
+#include "stc_str.h"
 
 #ifndef _WIN32
   #include <dirent.h>
@@ -22,6 +23,8 @@
 #endif
 
 // TODO: better error handling
+// IDEA: do not print any error; introduce win_errno for Windows-specific errors
+// TODO: if the user wants errors to be printed, it should #define a symbol for it
 // TODO: should if_exists/not_exists function check for existance?
 
 static FILE* file_open(char* path, const char* opts) {
@@ -98,21 +101,6 @@ bool file_move(char* src, char* dst) {
   return res;
 }
 
-// TODO: more path functions
-// https://doc.rust-lang.org/std/path/struct.Path.html
-char* path_filename(char* path) {
-  char* unix_path = strrchr(path, '/');
-  char* wind_path = strrchr(path, '\\');
-  if (unix_path == NULL && wind_path == NULL) return path;
-  
-  char* res = unix_path > wind_path ? unix_path : wind_path;
-  return res + 1;
-}
-
-char* path_filename_ext(char* path) {
-  return strrchr(path, '.') + 1;
-}
-
 #ifdef _WIN32
 static void perror_windows(const char* msg) {
   DWORD err = GetLastError();
@@ -135,6 +123,121 @@ static void perror_windows(const char* msg) {
   }
 }
 #endif
+
+/////////////////////
+
+// TODO: consider making path a sperate type
+// TODO: should we check for null?
+// https://doc.rust-lang.org/std/path/struct.Path.html
+
+char* path_last_component(char* path) {
+  char* unix_path = strrchr(path, '/');
+  char* wind_path = strrchr(path, '\\');
+  char* res = unix_path > wind_path ? unix_path : wind_path;
+  return res;
+}
+
+char* path_filename(char* path) {
+  char* res = path_last_component(path);
+  if (res == NULL) return path;
+  return res + 1;
+}
+
+char* path_extension(char* path) {
+  char* res = strrchr(path, '.');
+  if (res == NULL) return res;
+  return res + 1;
+}
+
+str path_filename_no_ext(char* path) {
+  str s = str_from_cstr(path_filename(path));
+  return str_skip_rev_until_char(s, '.');
+}
+
+str path_parent(char* path) {
+  char* parent_start = path_last_component(path);
+  // there are no parents
+  if (parent_start == NULL || parent_start == path) return STR_EMPTY;
+  return str_from_cstr_unchecked(path, parent_start - path);
+}
+
+char* path_absolute(char* path) {
+#ifndef _WIN32
+  // https://man7.org/linux/man-pages/man3/realpath.3.html
+  // should path be prefixed with "./" for realpath to work?
+  char* res = realpath(path, NULL);
+  if (res == NULL) perror("Couldn't get absolute path");
+  return res;
+#else
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
+  DWORD path_size = GetFullPathName(path, 0, NULL, NULL);
+  char* buf = malloc(path_size);
+  DWORD res = GetFullPathName(path, path_size, buf, NULL);
+  if (res == 0) {
+    perror_windows("Couldn't get absolute path");
+    return NULL;
+  }
+  return buf;
+#endif
+}
+
+bool path_is_absolute(char * path) {
+  bool is_unix_abs = path[0] == '/';
+  bool is_wind_abs = 
+  (isalpha(path[0]) && path[1] == ':')
+  || (path[0] == '\\' && path[1] == '\\');
+
+  return is_unix_abs || is_wind_abs;
+}
+
+bool path_is_relative(char* path) {
+  return !path_is_absolute(path);
+}
+
+// TODO: might be an iterator
+int isseparator(int c) { return c == '/' || c == '\\'; }
+StrList path_components(char* path) {
+  return str_split_when(str_from_cstr(path), isseparator);
+}
+
+// https://doc.rust-lang.org/std/path/struct.PathBuf.html
+
+void path_push(String* sb, char* path) {
+  if (path_is_absolute(path)) sb->len = 0;
+  else if (String_last(*sb) != '/') String_push(sb, '/');
+  String_append_cstr(sb, path);
+}
+
+bool path_pop(String* sb) {
+  // we append null so we can use path_last_component
+  String_append_null(sb);
+  char* last_component_start = path_last_component(sb.data);
+  if (last_component_start == NULL) return false;
+  sb->len = last_component_start - sb->data;
+  return true;
+}
+
+void path_set_filename(String* sb, char* filename) {
+  path_pop(sb);
+  path_push(sb, filename);
+}
+
+bool path_set_extension(String* sb, char* extension) {
+  if (sb->len == 0) return false;
+
+  bool has_dot = extension[0] == '.';
+  char* ext_start = strrchr(path, '.');
+
+  if (ext_start != NULL) {
+    sb->len = (ext_start - sb->data) - 1;
+  }
+
+  if (!has_dot) String_push(sb, '.');
+  String_append_cstr(sb, extension);
+  return true;
+}
+
+/////////////////////
 
 typedef enum {
   FileType_Other,
@@ -186,6 +289,7 @@ FileType file_type(char* path) {
 #endif
 }
 
+// TODO: consider making this an iterator instead, together with a dir_open and a dir_close.
 DirEntries dir_read(char* dirpath) {
   DirEntries entries = {0};
   DirEntry entry = {0};
@@ -286,8 +390,7 @@ bool file_exists(char* path) {
   return stat(path, &buf) == 0 && S_ISREG(buf.st_mode);
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesa?redirectedfrom=MSDN
-  DWORD attribs = GetFileAttributes(path);
-  return attribs != INVALID_FILE_ATTRIBUTES;
+  return GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES;
 #endif
 }
 
@@ -330,10 +433,14 @@ bool dir_make_if_not_exists(char* path) {
 #endif
 }
 
+bool dir_make_recursive(char* path) {
+
+}
 
 // ?? nob_file_metadata(const char *path, bool follow_links);
 // bool nob_mkdir_if_not_exists_recursive(const char *path);
 // bool nob_rmdir_if_exists_recursive(const char *path);
+// bool nob_create_file_recursive(const char *path);
 // bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
 // bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 // bool nob_write_file(const char *path, const void *data, size_t size);

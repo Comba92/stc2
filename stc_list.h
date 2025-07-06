@@ -119,6 +119,14 @@ list_name list_name##_from_array(type* arr, size_t arr_len) { \
   return res; \
 } \
 \
+list_name list_name##_clone(list_name l) { \
+  list_name res = {0}; \
+  list_name##_reserve(&res, l.len); \
+  memcpy(res.data, l.data, l.len * sizeof(type)); \
+  res.len = l.len; \
+  return res; \
+} \
+\
 void list_name##_append_array(list_name* l, type* arr, size_t arr_len) { \
   list_name##_reserve(l, l->len + arr_len); \
   /* \
@@ -138,9 +146,7 @@ void list_name##_drop(list_name* l) { \
   l->data = NULL; \
 } \
 
-
 list_def(int, IntList)
-list_def(char*, CstrList)
 
 #endif
 

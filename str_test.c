@@ -24,7 +24,7 @@ int main() {
   res_dbg(str_find(s, 'W'));
   res_dbg(str_contains(s, 'W'));
   res_dbg(str_advance_while(s, isupper));
-  res_dbg(str_advance_while_rev(s, isupper));
+  res_dbg(str_advance_rev_while(s, isupper));
   
   printf("\n");
 
@@ -46,9 +46,9 @@ int main() {
   str_dbg(str_skip_rev(s, s.len));
 
   str_dbg(str_skip_while(s, isalpha));
-  str_dbg(str_skip_while_rev(s, isalpha));
+  str_dbg(str_skip_rev_while(s, isalpha));
   str_dbg(str_skip_while(s, isdigit));
-  str_dbg(str_skip_while_rev(s, isdigit));
+  str_dbg(str_skip_rev_while(s, isdigit));
 
   str_dbg(str_skip_until_char(s, 'r'));
   str_dbg(str_skip_until_match(s, str_from_cstr("World")));
@@ -64,9 +64,9 @@ int main() {
   str_dbg(str_take_rev(s, s.len));
 
   str_dbg(str_take_while(s, isalpha));
-  str_dbg(str_take_while_rev(s, isalpha));
+  str_dbg(str_take_rev_while(s, isalpha));
   str_dbg(str_take_while(s, isdigit));
-  str_dbg(str_take_while_rev(s, isdigit));
+  str_dbg(str_take_rev_while(s, isdigit));
 
   str_dbg(str_take_until_char(s, 'W'));
   str_dbg(str_take_until_match(s, str_from_cstr("World")));
