@@ -15,8 +15,6 @@ typedef struct {
   char* data;
 } str;
 
-
-
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
 #define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
@@ -316,23 +314,36 @@ StrList str_words_collect(str s) {
 typedef struct {
   str src;
   str target;
-  size_t idx;
-} StrMatch;
+  size_t skipped;
+  int last_match;
+} StrMatches;
 
-StrMatch str_matches(str s, str target) {
-  return (StrMatch) { s, target, 0 };
+StrMatches str_matches(str s, str target) {
+  int match = str_match(s, target);
+  if (match == -1) {
+    return (StrMatches) { STR_EMPTY, target, s.len, match };
+  } else {
+    return (StrMatches) { str_skip(s, match+1), target, 0, match };
+  }
 }
 
-int str_next_match(StrMatch* it) {
+int str_next_match(StrMatches* it) {
+  if (it->last_match == -1) return -1;
+
+  int last = it->last_match;
+  int idx = it->skipped;
+  
   int match = str_match(it->src, it->target);
+  it->last_match = match;
   if (match == -1) {
-    return match;
+    it->skipped += it->src.len;
+    it->src = STR_EMPTY;  
   } else {
-    int curr = it->idx;
-    it->idx += match+1;
+    it->skipped += last+1;
     it->src = str_skip(it->src, match+1);
-    return curr + match;
   }
+
+  return idx + last;
 }
 
 typedef struct {
@@ -424,8 +435,6 @@ str String_to_str(String sb) {
   };
 }
 
-#define SBV(sb) String_to_str(sb)
-
 // str String_to_owned_str(String* sb) {
 //   char* s = malloc(sb->len);
 //   memcpy(s, sb->data, sb->len);
@@ -464,6 +473,9 @@ String String_from_str(str s) {
   return String_from_array(s.data, s.len);
 }
 
+#define SB(cstr) String_from_cstr((cstr))
+#define SBV(sb) String_to_str((sb))
+
 char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
@@ -475,22 +487,22 @@ String String_format(String* sb, char* fmt, ...) {
   int real_size = vsnprintf(NULL, 0, fmt, args);
   va_end(args);
 
-  sb->len = 0;
+  // real_size excludes null
   String_reserve(sb, real_size+1);
-
+  
   va_start(args, fmt);
-  vsnprintf(sb->data, real_size, fmt, args);
+  // should write_real_size + null
+  vsnprintf(sb->data, real_size+1, fmt, args);
   va_end(args);
   
+  sb->len = real_size;
   return *sb;
 }
 
-#define TMP_BUF_LEN 2048
-static char tmp_buf[TMP_BUF_LEN];
+
 static String tmp_sb = {0};
 
 int str_parse_int(str s) {
-  tmp_sb.len = 0;
   String_reserve(&tmp_sb, s.len+1);
   memcpy(tmp_sb.data, s.data, s.len);
   String_append_null(&tmp_sb);
@@ -571,18 +583,34 @@ String str_replace(String* sb, str sv, str from, str to) {
   return *sb;
 }
 
+// String str_replace_all(String* sb, str sv, str from, str to) {
+//   IntList matches = str_match_all(sv, from);
+  
+//   sb->len = 0;
+//   int last = 0;
+//   listforeach(int, match, &matches) {
+//     String_append_str(sb, str_slice(sv, last, *match));
+//     String_append_str(sb, to);
+//     last = *match + from.len;
+//   }
+//   String_append_str(sb, str_skip(sv, last));
+//   IntList_drop(&matches);
+
+//   return *sb;
+// }
+
 String str_replace_all(String* sb, str sv, str from, str to) {
-  IntList matches = str_match_all(sv, from);
+  StrMatches it = str_matches(sv, from);
   
   sb->len = 0;
   int last = 0;
-  listforeach(int, match, &matches) {
-    String_append_str(sb, str_slice(sv, last, *match));
+  while (!iter_done(it)) {
+    int match = str_next_match(&it);
+    String_append_str(sb, str_slice(sv, last, match));
     String_append_str(sb, to);
-    last = *match + from.len;
+    last = match + from.len;
   }
   String_append_str(sb, str_skip(sv, last));
-  IntList_drop(&matches);
 
   return *sb;
 }
