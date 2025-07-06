@@ -47,11 +47,11 @@ void name##_assert(name l, size_t i) { \
 } \
  \
 type name##_first(name l) { \
-  name##assert(l, 0); \
+  name##_assert(l, 0); \
   return l.data[0]; \
 } \
 type name##_last(name l) { \
-  name##assert(l, 0); \
+  name##_assert(l, 0); \
   return l.data[l.len-1]; \
 } \
  \

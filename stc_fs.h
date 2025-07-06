@@ -175,7 +175,7 @@ char* path_extension(char* path) {
 
 str path_filename_no_ext(char* path) {
   str s = str_from_cstr(path_filename(path));
-  return str_skip_rev_until_char(s, '.');
+  return str_skip_rev_untilc(s, '.');
 }
 
 str path_parent(char* path) {
@@ -330,6 +330,7 @@ FileType file_type(char* path) {
 }
 
 // TODO: consider making this an iterator instead, together with a dir_open and a dir_close.
+
 DirEntries dir_read(char* dirpath) {
   DirEntries entries = {0};
   DirEntry entry = {0};
@@ -491,20 +492,20 @@ bool dir_create_if_not_exists(char* path) {
 }
 
 
-static String tmp_sb = {0};
+static String fs_tmp_sb = {0};
 bool dir_create_recursive(char* path) {
-  tmp_sb.len = 0;
+  fs_tmp_sb.len = 0;
   StrList components = path_components(path);
 
-  String_append_str(&tmp_sb, path_prefix(path));
+  String_append_str(&fs_tmp_sb, path_prefix(path));
 
   bool had_error = false;
   listforeach(str, component, &components) {
-    String_append_str(&tmp_sb, *component);
-    String_push(&tmp_sb, '/');
-    String_append_null(&tmp_sb);
+    String_append_str(&fs_tmp_sb, *component);
+    String_push(&fs_tmp_sb, '/');
+    String_append_null(&fs_tmp_sb);
     
-    if (!dir_create_if_not_exists(tmp_sb.data)) {
+    if (!dir_create_if_not_exists(fs_tmp_sb.data)) {
       had_error = true;
       break;
     }
@@ -540,21 +541,21 @@ bool dir_delete_contents(char* path) {
 }
 
 bool dir_delete_recursive(char* path) {
-  tmp_sb.len = 0;
-  String_append_str(&tmp_sb, str_from_cstr(path));
-  String_append_null(&tmp_sb);
+  fs_tmp_sb.len = 0;
+  String_append_str(&fs_tmp_sb, str_from_cstr(path));
+  String_append_null(&fs_tmp_sb);
 
   bool had_error = false;
-  while (tmp_sb.len > 0) {
-    char* dir = path_last_component(tmp_sb.data);
+  while (fs_tmp_sb.len > 0) {
+    char* dir = path_last_component(fs_tmp_sb.data);
     
     if (!dir_delete_contents(dir)) {
       had_error = true;
       break;
     }
 
-    path_pop(&tmp_sb);
-    String_append_null(&tmp_sb);
+    path_pop(&fs_tmp_sb);
+    String_append_null(&fs_tmp_sb);
   }
 
   return !had_error;
@@ -594,10 +595,10 @@ bool file_create_if_not_exists(char* path) {
 
 bool file_create_recursive(char* path) {
   str parent = path_parent(path);
-  tmp_sb.len = 0;
-  String_append_str(&tmp_sb, parent);
-  String_append_null(&tmp_sb);
-  bool dir_res = dir_create_recursive(tmp_sb.data);
+  fs_tmp_sb.len = 0;
+  String_append_str(&fs_tmp_sb, parent);
+  String_append_null(&fs_tmp_sb);
+  bool dir_res = dir_create_recursive(fs_tmp_sb.data);
   return dir_res && file_create_if_not_exists(path);
 }
 

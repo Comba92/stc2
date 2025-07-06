@@ -15,8 +15,7 @@ typedef struct {
   char* data;
 } str;
 
-#define TMP_BUF_LEN 2048
-static char tmp_buf[TMP_BUF_LEN];
+
 
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
@@ -39,7 +38,7 @@ str str_from_cstr(char* s) {
   return (str) { strlen(s), s };
 }
 
-#define STR(cstr) str_from_cstr((cstr))
+#define SV(cstr) str_from_cstr((cstr))
 
 str str_from_cstr_unchecked(char* s, size_t len) {
   return (str) { len, s };
@@ -48,7 +47,7 @@ str str_from_cstr_unchecked(char* s, size_t len) {
 const str STR_EMPTY = {0, ""};
 
 bool str_is_empty(str s) {
-  return s.data == NULL || s.len == 0;
+  return s.data == NULL || s.data == "" || s.len == 0;
 }
 
 str str_slice(str s, size_t start, size_t end) {
@@ -148,12 +147,12 @@ str str_skip_rev(str s, size_t n) {
   if (n > s.len) return STR_EMPTY;
   return str_slice(s, 0, s.len - n);
 }
-str str_skip_until_char(str s, char c) {
+str str_skip_untilc(str s, char c) {
   int idx = str_find(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_skip(s, idx);
 }
-str str_skip_rev_until_char(str s, char c) {
+str str_skip_rev_untilc(str s, char c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_take(s, idx);
@@ -164,22 +163,22 @@ str str_take_rev(str s, size_t n) {
   if (n > s.len) return s;
   return str_slice(s, s.len - n, s.len);
 }
-str str_take_until_char(str s, char c) {
+str str_take_untilc(str s, char c) {
   int idx = str_find(s, c);
   if (idx == -1) return s;
   return str_take(s, idx);
 }
-str str_take_rev_until_char(str s, char c) {
+str str_take_rev_untilc(str s, char c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return s;
   return str_skip(s, idx);
 }
 
-str str_skip_until_match(str s, str target) {
+str str_skip_until(str s, str target) {
   int idx = str_match(s, target);
   return str_skip(s, idx);
 }
-str str_take_until_match(str s, str target) {
+str str_take_until(str s, str target) {
   int idx = str_match(s, target);
   return str_take(s, idx);
 }
@@ -253,24 +252,8 @@ str str_trim(str s) {
   return str_trim_end(str_trim_start(s));
 }
 
-int str_parse_int(str s) {
-  assert(s.len+1 < TMP_BUF_LEN && "str_parse_int(): number string exceeds temporary buffer size");
-  memcpy(tmp_buf, s.data, s.len);
-  tmp_buf[s.len + 1] = '\0';
-  int n = atoi(tmp_buf);
-  return n;
-}
-
-double str_parse_float(str s) {
-  assert(s.len < TMP_BUF_LEN && "str_parse_float(): number string exceeds temporary buffer size");
-  memcpy(tmp_buf, s.data, s.len);
-  tmp_buf[s.len + 1] = '\0';
-  int n = atof(tmp_buf);
-  return n;
-}
-
 list_def(str, StrList)
-StrList str_split_char(str s, char c) {
+StrList str_splitc_collect(str s, char c) {
   StrList ss = {0};
 
   while (s.len > 0) {
@@ -286,7 +269,7 @@ StrList str_split_char(str s, char c) {
   return ss;
 }
 
-StrList str_split(str s, str pattern) {
+StrList str_split_collect(str s, str pattern) {
   StrList ss = {0};
 
   while (s.len > 0) {
@@ -302,7 +285,7 @@ StrList str_split(str s, str pattern) {
   return ss;
 }
 
-StrList str_split_when(str s, CharPredicate pred) {
+StrList str_split_when_collect(str s, CharPredicate pred) {
   StrList ss = {0};
 
   while (s.len > 0) {
@@ -316,92 +299,119 @@ StrList str_split_when(str s, CharPredicate pred) {
   return ss;
 }
 
-StrList str_lines(str s) {
-  return str_split_char(s, '\n');
+StrList str_lines_collect(str s) {
+  return str_splitc_collect(s, '\n');
 }
 
-StrList str_words(str s) {
-  return str_split_when(s, isspace);
+StrList str_words_collect(str s) {
+  return str_split_when_collect(s, isspace);
 }
 
 //////////////////////
 
 // TODO: iterators aren't fleshed out yet
-// IDEA: each iterator should a different struct, method just makes the struct
-// each struct has a next method
+
+#define iter_done(it) ((it).src.len == 0)
 
 typedef struct {
-  size_t curr;
-  str s;
-} StrIter;
+  str src;
+  str target;
+  size_t idx;
+} StrMatch;
 
-#define iterfor(name, s) for(StrIter name = str_iter((s)); !str_iter_done(name); )
-
-StrIter str_iter(str s) {
-  return (StrIter) {0, s};
+StrMatch str_matches(str s, str target) {
+  return (StrMatch) { s, target, 0 };
 }
 
-bool str_iter_done(StrIter it) {
-  return it.s.len == 0;
-}
-
-int str_iter_match(StrIter* it, str target) {
-  int match = str_match(it->s, target);
+int str_next_match(StrMatch* it) {
+  int match = str_match(it->src, it->target);
   if (match == -1) {
-    it->curr += it->s.len;
-    it->s = STR_EMPTY;
     return match;
   } else {
-    int curr = it->curr;
-    it->curr += match+1;
-    it->s = str_skip(it->s, match+1);
+    int curr = it->idx;
+    it->idx += match+1;
+    it->src = str_skip(it->src, match+1);
     return curr + match;
   }
 }
 
-str str_iter_split_char(StrIter* it, char c) {
-  int i = str_find(it->s, c);
+typedef struct {
+  str src;
+  char c;
+} StrSplitChar;
+
+StrSplitChar str_splitc(str s, char c) {
+  return (StrSplitChar) { s, c };
+}
+
+str str_next_splitc(StrSplitChar* it) {
+  int i = str_find(it->src, it->c);
   if (i == -1) {
-    str res = it->s;
-    it->s = STR_EMPTY;
+    str res = it->src;
+    it->src = STR_EMPTY;
     return res;
   } else {
-    str res = str_take(it->s, i);
-    it->s = str_skip(it->s, i+1);
+    str res = str_take(it->src, i);
+    it->src = str_skip(it->src, i+1);
     return res;
   }
 }
 
-str str_iter_split(StrIter* it, str pattern) {
-  int i = str_match(it->s, pattern);
+typedef struct {
+  str src;
+  str pattern;
+} StrSplit;
+
+StrSplit str_split(str s, str pattern) {
+  return (StrSplit) { s, pattern };
+}
+
+str str_next_split(StrSplit* it) {
+  int i = str_match(it->src, it->pattern);
   if (i == -1) {
-    str res = it->s;
-    it->s = STR_EMPTY;
+    str res = it->src;
+    it->src = STR_EMPTY;
     return res;
   } else {
-    str res = str_take(it->s, i);
-    it->s = str_skip(it->s, i+pattern.len);
+    str res = str_take(it->src, i);
+    it->src = str_skip(it->src, i+it->pattern.len);
     return res;
   }
 }
 
-str str_iter_split_when(StrIter* it, CharPredicate pred) {
-  int i = str_advance_while_not(it->s, pred);
-  str res = str_take(it->s, i);
-  it->s = str_skip(it->s, i);
-  i = str_advance_while(it->s, pred);
-  it->s = str_skip(it->s, i);
+typedef struct {
+  str src;
+  CharPredicate pred;
+} StrSplitWhen;
+
+StrSplitWhen str_split_when(str s, CharPredicate pred) {
+  return (StrSplitWhen) { s, pred };
+}
+
+str str_next_split_when(StrSplitWhen* it) {
+  int i = str_advance_while_not(it->src, it->pred);
+  str res = str_take(it->src, i);
+  it->src = str_skip(it->src, i);
+  i = str_advance_while(it->src, it->pred);
+  it->src = str_skip(it->src, i);
   return res;
 }
 
-str str_iter_line(StrIter* it) {
-  return str_iter_split_char(it, '\n');
+typedef StrSplitChar StrLines;
+StrLines str_lines(str s) {
+  return str_splitc(s, '\n');
+}
+str str_next_line(StrLines* it) {
+  return str_next_splitc(it);
 }
 
-str str_iter_word(StrIter* it) {
-  return str_iter_split_when(it, isspace);
+typedef StrSplitWhen StrWords;
+StrWords str_words(str s) {
+  return str_split_when(s, isspace);
 }
-
+str str_next_word(StrWords* it) {
+  return str_next_split_when(it);
+}
 
 //////////////////////
 
@@ -413,7 +423,8 @@ str String_to_str(String sb) {
     .data = sb.data,
   };
 }
-#define STRB(sb) String_to_str(sb)
+
+#define SBV(sb) String_to_str(sb)
 
 // str String_to_owned_str(String* sb) {
 //   char* s = malloc(sb->len);
@@ -457,23 +468,45 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
 
+
 String String_format(String* sb, char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  int real_size = vsnprintf(tmp_buf, TMP_BUF_LEN, fmt, args);
+  int real_size = vsnprintf(NULL, 0, fmt, args);
   va_end(args);
 
-  if (real_size > TMP_BUF_LEN) {
-    fprintf(stderr, 
-      "String_format(): fmt_buf size is not big enough: size is %d, should have written %d",
-      TMP_BUF_LEN,
-      real_size
-    );
-  }
-
   sb->len = 0;
-  String_append_cstr(sb, tmp_buf);
+  String_reserve(sb, real_size+1);
+
+  va_start(args, fmt);
+  vsnprintf(sb->data, real_size, fmt, args);
+  va_end(args);
+  
   return *sb;
+}
+
+#define TMP_BUF_LEN 2048
+static char tmp_buf[TMP_BUF_LEN];
+static String tmp_sb = {0};
+
+int str_parse_int(str s) {
+  tmp_sb.len = 0;
+  String_reserve(&tmp_sb, s.len+1);
+  memcpy(tmp_sb.data, s.data, s.len);
+  String_append_null(&tmp_sb);
+
+  int n = atoi(tmp_sb.data);
+  return n;
+}
+
+double str_parse_float(str s) {
+  tmp_sb.len = 0;
+  String_reserve(&tmp_sb, s.len+1);
+  memcpy(tmp_sb.data, s.data, s.len);
+  String_append_null(&tmp_sb);
+
+  double n = atof(tmp_sb.data);
+  return n;
 }
 
 String int_to_str(String* sb, int n) {
