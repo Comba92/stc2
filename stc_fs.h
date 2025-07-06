@@ -64,22 +64,25 @@ char* file_read_to_string(char* path) {
 
   if (fseek(f, 0, SEEK_END) != 0) {
     perror("Couldn't seek end of file");
+    file_close(f);
     return NULL;
   }
 
-  long file_size = ftell(f);
+  size_t file_size = ftell(f);
   if (file_size < 0) {
     perror("Could't tell size of file");
+    file_close(f);
     return NULL;
   }
 
   if (fseek(f, 0, SEEK_SET) != 0) {
     perror("Couldn't seek start of file");
+    file_close(f);
     return NULL;
   }
 
   char* buf = malloc(file_size);
-  int read = fread(buf, 1, file_size, f);
+  size_t read = fread(buf, 1, file_size, f);
   if (read != file_size) {
     perror("Couldn't read whole file");
   }
@@ -87,6 +90,27 @@ char* file_read_to_string(char* path) {
   file_close(f);
 
   return buf;
+}
+
+bool file_write_bytes(char* path, char* data, size_t len) {
+  FILE* fd = file_open_write(path);
+  size_t wrote = fwrite(data, 1, len, fd);
+  bool res = wrote != len;
+  if (!res) {
+    perror("Couldn't write whole file");
+  }
+
+  return file_close(fd) && res;
+}
+
+bool file_append_bytes(FILE* fd, char* data, size_t len) {
+  size_t wrote = fwrite(data, 1, len, fd);
+  if (wrote != len) {
+    perror("Couldn't append all data");
+    return false;
+  }
+
+  return true;
 }
 
 bool file_delete(char* src) {
@@ -164,13 +188,17 @@ str path_parent(char* path) {
 char* path_absolute(char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
-  // should path be prefixed with "./" for realpath to work?
+  // TODO: should path be prefixed with "./" for realpath to work?
   char* res = realpath(path, NULL);
   if (res == NULL) perror("Couldn't get absolute path");
   return res;
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
   DWORD path_size = GetFullPathName(path, 0, NULL, NULL);
+  if (path_size == 0) {
+    perror_windows("Couldn't calculate absolute path length");
+    return NULL;
+  }
   char* buf = malloc(path_size);
   DWORD res = GetFullPathName(path, path_size, buf, NULL);
   if (res == 0) {
@@ -181,10 +209,20 @@ char* path_absolute(char* path) {
 #endif
 }
 
+str path_prefix(char* path) {
+  if (path[0] == '/') return str_from_cstr("/");
+  else if (isalpha(path[0]) && path[1] == ':' && path[2] == '\\') {
+    return str_take(str_from_cstr(path), 3);
+  }
+  // TODO: windows other weird prefixes aren't supported
+
+  return STR_EMPTY;
+}
+
 bool path_is_absolute(char * path) {
   bool is_unix_abs = path[0] == '/';
   bool is_wind_abs = 
-  (isalpha(path[0]) && path[1] == ':')
+  (isalpha(path[0]) && path[1] == ':' && path[2] == '\\')
   || (path[0] == '\\' && path[1] == '\\');
 
   return is_unix_abs || is_wind_abs;
@@ -211,7 +249,7 @@ void path_push(String* sb, char* path) {
 bool path_pop(String* sb) {
   // we append null so we can use path_last_component
   String_append_null(sb);
-  char* last_component_start = path_last_component(sb.data);
+  char* last_component_start = path_last_component(sb->data);
   if (last_component_start == NULL) return false;
   sb->len = last_component_start - sb->data;
   return true;
@@ -225,8 +263,9 @@ void path_set_filename(String* sb, char* filename) {
 bool path_set_extension(String* sb, char* extension) {
   if (sb->len == 0) return false;
 
+  String_append_null(sb);
   bool has_dot = extension[0] == '.';
-  char* ext_start = strrchr(path, '.');
+  char* ext_start = strrchr(sb->data, '.');
 
   if (ext_start != NULL) {
     sb->len = (ext_start - sb->data) - 1;
@@ -331,7 +370,10 @@ DirEntries dir_read(char* dirpath) {
     }
 
     DirEntries_push(&entries, entry);
-    close(fd);
+    if (close(fd) != 0) {
+      perror("Coudln't close file during directory scan");
+      continue;
+    };
   }
 
   if (prev_err != errno) {
@@ -348,7 +390,9 @@ DirEntries dir_read(char* dirpath) {
       // }
   // }
 
-  closedir(d);
+  if (closedir(d) != 0) {
+    perror("Couldn't close directory after completed scan");
+  };
 #else
   char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
@@ -417,8 +461,7 @@ char* dir_current() {
 #endif
 }
 
-bool dir_make_if_not_exists(char* path) {
-  // TODO: is dir_exists check redundant?
+bool dir_create_if_not_exists(char* path) {
   if (dir_exists(path)) return true;
   
 #ifndef _WIN32
@@ -433,21 +476,37 @@ bool dir_make_if_not_exists(char* path) {
 #endif
 }
 
-bool dir_make_recursive(char* path) {
 
+static String tmp_sb = {0};
+bool dir_create_recursive(char* path) {
+  tmp_sb.len = 0;
+  StrList components = path_components(path);
+
+  String_append_str(&tmp_sb, path_prefix(path));
+
+  bool had_error = false;
+  listforeach(str, component, &components) {
+    String_append_str(&tmp_sb, *component);
+    String_push(&tmp_sb, '/');
+    String_append_null(&tmp_sb);
+    
+    if (!dir_create_if_not_exists(tmp_sb.data)) {
+      had_error = true;
+      break;
+    }
+  }
+
+  StrList_drop(&components);
+  return !had_error;
 }
 
 // ?? nob_file_metadata(const char *path, bool follow_links);
 // bool nob_mkdir_if_not_exists_recursive(const char *path);
 // bool nob_rmdir_if_exists_recursive(const char *path);
-// bool nob_create_file_recursive(const char *path);
 // bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
 // bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
-// bool nob_write_file(const char *path, const void *data, size_t size);
-// bool nob_write_entire_file(const char *path, const void *data, size_t size);
 
 bool dir_delete_if_exists(char* path) {
-  // TODO: is dir_exists check redundant?
   if (!dir_exists(path)) return true;
   
   #ifndef _WIN32
@@ -461,24 +520,84 @@ bool dir_delete_if_exists(char* path) {
   #endif
 }
 
+bool dir_delete_contents(char* path) {
+  // TODO
+  // https://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
+}
+
+bool dir_delete_recursive(char* path) {
+  tmp_sb.len = 0;
+  String_append_str(&tmp_sb, str_from_cstr(path));
+  String_append_null(&tmp_sb);
+
+  bool had_error = false;
+  while (tmp_sb.len > 0) {
+    char* dir = path_last_component(tmp_sb.data);
+    
+    if (!dir_delete_contents(dir)) {
+      had_error = true;
+      break;
+    }
+
+    path_pop(&tmp_sb);
+    String_append_null(&tmp_sb);
+  }
+
+  return !had_error;
+}
+
 // TODO: creations options and permissions?
 bool file_create_if_not_exists(char* path) {
-  // https://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html
-  // https://learn.microsoft.com/it-it/windows/win32/api/fileapi/nf-fileapi-createfilea
-
-  // Consider doing a system-dependant implementation instead of using fopen;
-  // file_exsits() will already query the os (redundant check)
   if (file_exists(path)) return false;
-  
-  FILE* fd = file_open_write(path);
-  return file_close(fd);
+
+#ifndef _WIN32
+  // https://man7.org/linux/man-pages/man2/open.2.html
+  int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
+  if (fd == -1) {
+    perror("Couldn't create file");
+    return false;
+  }
+  if (close(fd) != 0) {
+    perror("Couldn't close created file");
+    return false;
+  }
+#else
+  // https://learn.microsoft.com/it-it/windows/win32/api/fileapi/nf-fileapi-createfilea
+  printf("Creating file: %s\n", path);
+  HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (h == INVALID_HANDLE_VALUE) {
+    perror_windows("Couldn't create file");
+    return false;
+  }
+  if (CloseHandle(h) == 0) {
+    perror_windows("Couldn't close created file");
+    return false;
+  }
+#endif
+
+  return true;
+}
+
+bool file_create_recursive(char* path) {
+  str parent = path_parent(path);
+  char* parent_cstr = str_to_cstr(parent);
+  bool dir_res = dir_create_recursive(parent_cstr);
+  free(parent_cstr);
+  return dir_res && file_create_if_not_exists(path);
 }
 
 // TODO: add flag to choose if should overwrite
 bool file_copy(char* src, char* dst) {
 #ifndef _WIN32
   int src_fd = open(src, O_RDONLY, 0);
-  int dst_fd = open(dst O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+
+  // bool overwrite = false;
+  // int flags = 0;
+  // if (overwrite) {
+  //   flags = O_TRUNCATE:
+  // }
+
+  int dst_fd = open(dst, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
 
   if (src_fd == -1 || dst_fd == -1) {
     perror("Couldn't open either src or dst");
@@ -500,6 +619,16 @@ bool file_copy(char* src, char* dst) {
     return false;
   }
 
+  if (close(src_fd) != 0) {
+    perror("Coudlnt close src file");
+    return false;
+  }
+
+  if (close(dst_fd) != 0) {
+    perror("Coudlnt close dst file");
+    return false;
+  }
+
   return true;
 #else
   // https://learn.microsoft.com/it-it/windows/win32/api/winbase/nf-winbase-copyfile
@@ -507,10 +636,6 @@ bool file_copy(char* src, char* dst) {
   if (!res) perror_windows("Couldn't copy src file to dst file");
   return res;
 #endif
-}
-
-bool file_write(char* path, char* data, size_t len) {
-
 }
 
 #endif

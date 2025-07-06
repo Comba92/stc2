@@ -22,9 +22,11 @@ int main() {
   printf("%d\n", dir_exists("../stc"));
   printf("%d\n", dir_exists("../urmom"));
 
-  dir_make_if_not_exists("./test1");
-  dir_make_if_not_exists("./test2/daaaaa/dsadasad/adasdas");
+  dir_create_if_not_exists("./test1");
+  dir_create_recursive("./test2/daaaaa/dsadasad/adasdas");
   dir_delete_if_exists("./test1");
+
+  file_create_recursive("./test3/kysfag/hahahah/test");
 
   printf("Working dir: %s\n", dir_current());
   printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt"));

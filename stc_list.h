@@ -11,13 +11,13 @@
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
-#define list_def(type, list_name) \
+#define list_def(type, name) \
 typedef struct { \
   size_t len, cap; \
   type* data; \
-} list_name; \
+} name; \
  \
-void list_name##_reserve(list_name* l, size_t new_cap) { \
+void name##_reserve(name* l, size_t new_cap) { \
   if (new_cap > l->cap) { \
     l->cap = l->cap == 0 ? 16 : l->cap; \
     while (new_cap > l->cap) l->cap *= 2; \
@@ -26,39 +26,39 @@ void list_name##_reserve(list_name* l, size_t new_cap) { \
     assert(l->data != NULL && "list realloc failed"); \
   } \
 } \
-void list_name##_resize(list_name* l, size_t new_len, type value) { \
+void name##_resize(name* l, size_t new_len, type value) { \
   if (new_len <= l->len) { \
     l->len = new_len; \
   } else { \
-    list_name##_reserve(l, l->len + new_len); \
+    name##_reserve(l, l->len + new_len); \
     for (int i=0; i<new_len; ++i) { \
       l->data[l->len + i] = value; \
     } \
   } \
 } \
  \
-void list_name##_push(list_name* l, type value) { \
-  list_name##_reserve(l, l->len + 1); \
+void name##_push(name* l, type value) { \
+  name##_reserve(l, l->len + 1); \
   l->data[l->len++] = value; \
 } \
  \
-type list_name##_first(list_name l) { \
+type name##_first(name l) { \
   return l.data[0]; \
 } \
-type list_name##_last(list_name l) { \
+type name##_last(name l) { \
   return l.data[l.len-1]; \
 } \
  \
-type list_name##_pop(list_name* l) { \
+type name##_pop(name* l) { \
   return l->data[--l->len]; \
 } \
  \
-void list_name##_assert(list_name l, size_t i) { \
+void name##_assert(name l, size_t i) { \
   assert(i < l.len && "list access out of bounds"); \
 } \
  \
-typedef bool (*list_name##CmpFn)(type a, type b); \
-int list_name##_find(list_name* l, type value, list_name##CmpFn pred) { \
+typedef bool (*name##CmpFn)(type a, type b); \
+int name##_find(name* l, type value, name##CmpFn pred) { \
   for(int i=0; i<l->len; ++i) { \
     if (pred(l->data[i], value)) return i; \
   } \
@@ -66,8 +66,8 @@ int list_name##_find(list_name* l, type value, list_name##CmpFn pred) { \
   return -1; \
 } \
  \
-typedef bool (*list_name##FilterFn)(type val); \
-void list_name##_filter(list_name* l, list_name##FilterFn pred) { \
+typedef bool (*name##FilterFn)(type val); \
+void name##_filter(name* l, name##FilterFn pred) { \
   size_t curr = 0; \
   for(int i=0; i < l->len; ++i) { \
     if (pred(l->data[i])) { \
@@ -77,24 +77,24 @@ void list_name##_filter(list_name* l, list_name##FilterFn pred) { \
   l->len = curr; \
 } \
  \
-void list_name##_swap(list_name* l, size_t a, size_t b) { \
-  list_name##_assert(*l, a); \
-  list_name##_assert(*l, b); \
+void name##_swap(name* l, size_t a, size_t b) { \
+  name##_assert(*l, a); \
+  name##_assert(*l, b); \
   type tmp = l->data[a]; \
   l->data[a] = l->data[b]; \
   l->data[b] = tmp; \
 } \
  \
-type list_name##_remove_swap(list_name* l, size_t i) { \
-  list_name##_assert(*l, i); \
+type name##_remove_swap(name* l, size_t i) { \
+  name##_assert(*l, i); \
   l->len--; \
   type res = l->data[i]; \
   l->data[i] = l->data[l->len]; \
   return res; \
 } \
  \
-void list_name##_append(list_name* this, list_name other) { \
-  list_name##_reserve(this, this->len + other.len); \
+void name##_append(name* this, name other) { \
+  name##_reserve(this, this->len + other.len); \
   /* \
   size_t len = this->len; \
   for(size_t i=0; i<other.len; ++i) { \
@@ -106,9 +106,9 @@ void list_name##_append(list_name* this, list_name other) { \
   this->len += other.len; \
 } \
  \
-list_name list_name##_from_array(type* arr, size_t arr_len) { \
-  list_name res = {0}; \
-  list_name##_reserve(&res, arr_len); \
+name name##_from_array(type* arr, size_t arr_len) { \
+  name res = {0}; \
+  name##_reserve(&res, arr_len); \
   /* \
   for(size_t i=0; i<arr_len; ++i) { \
     res.data[res.len++] = arr[i]; \
@@ -119,16 +119,16 @@ list_name list_name##_from_array(type* arr, size_t arr_len) { \
   return res; \
 } \
 \
-list_name list_name##_clone(list_name l) { \
-  list_name res = {0}; \
-  list_name##_reserve(&res, l.len); \
+name name##_clone(name l) { \
+  name res = {0}; \
+  name##_reserve(&res, l.len); \
   memcpy(res.data, l.data, l.len * sizeof(type)); \
   res.len = l.len; \
   return res; \
 } \
 \
-void list_name##_append_array(list_name* l, type* arr, size_t arr_len) { \
-  list_name##_reserve(l, l->len + arr_len); \
+void name##_append_array(name* l, type* arr, size_t arr_len) { \
+  name##_reserve(l, l->len + arr_len); \
   /* \
   size_t len = l->len; \
   for(size_t i=0; i<arr_len; ++i) { \
@@ -139,7 +139,7 @@ void list_name##_append_array(list_name* l, type* arr, size_t arr_len) { \
   l->len += arr_len; \
 } \
  \
-void list_name##_drop(list_name* l) { \
+void name##_drop(name* l) { \
   free(l->data); \
   l->cap = 0; \
   l->len = 0; \
@@ -245,8 +245,8 @@ void list_append(List<T>* this, List<T> other) {
   this->len += other.len;
 }
 
-list_name list_from_array(T* arr, size_t arr_len) {
-  list_name res = {0};
+name list_from_array(T* arr, size_t arr_len) {
+  name res = {0};
   list_reserve(&res, arr_len);
   // for(size_t i=0; i<arr_len; ++i) {
   //   res.data[res.len++] = arr[i];
