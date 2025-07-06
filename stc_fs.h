@@ -461,6 +461,19 @@ char* dir_current() {
 #endif
 }
 
+bool dir_set_current(char* path) {
+#ifndef _WIN32
+  bool res = chdir(path) == 0;
+  if (!res) perror("Couldn't set working directory");
+#else
+  bool res = SetCurrentDirectory(path) != 0;
+  if (!res) {
+    perror_windows("Couldn't set working directory");
+  }
+#endif
+  return res;
+}
+
 bool dir_create_if_not_exists(char* path) {
   if (dir_exists(path)) return true;
   

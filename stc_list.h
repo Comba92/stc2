@@ -42,19 +42,21 @@ void name##_push(name* l, type value) { \
   l->data[l->len++] = value; \
 } \
  \
+void name##_assert(name l, size_t i) { \
+  assert(i < l.len && "list access out of bounds"); \
+} \
+ \
 type name##_first(name l) { \
+  name##assert(l, 0); \
   return l.data[0]; \
 } \
 type name##_last(name l) { \
+  name##assert(l, 0); \
   return l.data[l.len-1]; \
 } \
  \
 type name##_pop(name* l) { \
   return l->data[--l->len]; \
-} \
- \
-void name##_assert(name l, size_t i) { \
-  assert(i < l.len && "list access out of bounds"); \
 } \
  \
 typedef bool (*name##CmpFn)(type a, type b); \
