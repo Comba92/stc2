@@ -210,7 +210,7 @@ char* path_absolute(char* path) {
 }
 
 str path_prefix(char* path) {
-  if (path[0] == '/') return str_from_cstr("/");
+  if (path[0] == '/') return str_from_cstr_unchecked("/", 1);
   else if (isalpha(path[0]) && path[1] == ':' && path[2] == '\\') {
     return str_take(str_from_cstr(path), 3);
   }
@@ -244,6 +244,7 @@ void path_push(String* sb, char* path) {
   if (path_is_absolute(path)) sb->len = 0;
   else if (String_last(*sb) != '/') String_push(sb, '/');
   String_append_cstr(sb, path);
+  String_append_null(sb);
 }
 
 bool path_pop(String* sb) {
@@ -593,9 +594,10 @@ bool file_create_if_not_exists(char* path) {
 
 bool file_create_recursive(char* path) {
   str parent = path_parent(path);
-  char* parent_cstr = str_to_cstr(parent);
-  bool dir_res = dir_create_recursive(parent_cstr);
-  free(parent_cstr);
+  tmp_sb.len = 0;
+  String_append_str(&tmp_sb, parent);
+  String_append_null(&tmp_sb);
+  bool dir_res = dir_create_recursive(tmp_sb.data);
   return dir_res && file_create_if_not_exists(path);
 }
 
