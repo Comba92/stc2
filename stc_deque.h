@@ -104,3 +104,25 @@ int deque_pop_front(Deque* d) {
   d->len += 1;
   return value;
 }
+
+int deque_get(Deque* d, size_t i) {
+  assert(i < d->len && "deque access out of bounds");
+  return d->data[(d->head + i) & (d->cap - 1)];
+}
+
+int deque_back(Deque* d) {
+  assert(d->len > 0 && "accessed empty queue");
+  return d->data[d->tail];
+}
+
+int deque_front(Deque* d) {
+  assert(d->len > 0 && "accessed empty queue");
+  return d->data[d->head];
+}
+
+void deque_free(Deque* d) {
+  free(d->data);
+  d->len = 0;
+  d->cap = 0;
+  d->data = NULL;
+}
