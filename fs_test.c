@@ -1,6 +1,9 @@
+#define STC_LOG_ERR
 #include "stc_fs.h"
 
+
 int main() {
+  file_read_to_string("fag.txt");
   file_read_to_string("test.txt");
 
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));

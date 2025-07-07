@@ -22,17 +22,57 @@
   #define PATH_MAX_LEN MAX_PATH
 #endif
 
-// TODO: better error handling
-// IDEA: do not print any error; introduce win_errno for Windows-specific errors
-// TODO: if the user wants errors to be printed, it should #define a symbol for it
 // TODO: should if_exists/not_exists function check for existance?
+
+static String fs_tmp_sb = {0};
+
+int fs_err_code() {
+#ifndef _WIN32
+  return errno;
+#else
+  return GetLastError();
+#endif
+}
+
+char* fs_err_msg() {
+  int err = fs_err_code();
+#ifndef _WIN32
+  return strerror(err);
+#else 
+  static char buf[512];
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
+  DWORD len = FormatMessage(
+    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+    NULL,
+    err,
+    LANG_SYSTEM_DEFAULT,
+    buf, 512,
+    NULL
+  );
+
+  if (len == 0) {
+    snprintf(buf, len <= 512 ? len : 512, "Failed to get error message for error code %d", err);
+  } else {
+    while (len > 0 && isspace(buf[len-1])) buf[len--] = '\0';
+  }
+
+  return buf;
+#endif
+}
+
+void fs_err_print(char* msg) {
+  if (msg == NULL || msg == "") {
+    fprintf(stderr, "%s\n", fs_err_msg());
+  } else {
+    fprintf(stderr, "%s: %s\n", msg, fs_err_msg());
+  }
+}
 
 static FILE* file_open(char* path, const char* opts) {
   FILE* f = fopen(path, opts);
-  if (f == NULL) {
-    perror("Couldn't open file");
-    return NULL;
-  }
+  #ifdef STC_LOG_ERR
+  if (f == NULL) fs_err_print(path);
+  #endif
   return f;
 }
 
@@ -49,11 +89,11 @@ FILE* file_open_append(char* path) {
 }
 
 bool file_close(FILE* f) {
-  if (fclose(f) != 0) {
-    perror("Couldn't close file");
-    return false;
-  }
-  return true;
+  bool res = fclose(f) != 0;
+  #ifdef STC_LOG_ERR
+    if (!res) fs_err_print(str_fmt_tmp("File descriptor %d", fileno(f)));
+  #endif
+  return res;
 }
 
 // TODO: consider memory mapped file reading
@@ -66,32 +106,40 @@ char* file_read_to_string(char* path) {
   }
 
   if (fseek(f, 0, SEEK_END) != 0) {
-    perror("Couldn't seek end of file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     file_close(f);
     return NULL;
   }
 
   size_t file_size = ftell(f);
   if (file_size < 0) {
-    perror("Could't tell size of file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     file_close(f);
     return NULL;
   }
 
   if (fseek(f, 0, SEEK_SET) != 0) {
-    perror("Couldn't seek start of file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     file_close(f);
     return NULL;
   }
 
   char* buf = malloc(file_size);
   size_t read = fread(buf, 1, file_size, f);
+
+  #ifdef STC_LOG_ERR
   if (read != file_size) {
-    perror("Couldn't read whole file");
+    fs_err_print(path);
   }
+  #endif
 
   file_close(f);
-
   return buf;
 }
 
@@ -99,17 +147,23 @@ bool file_write_bytes(char* path, char* data, size_t len) {
   FILE* fd = file_open_write(path);
   size_t wrote = fwrite(data, 1, len, fd);
   bool res = wrote != len;
+
+  #ifdef STC_LOG_ERR
   if (!res) {
-    perror("Couldn't write whole file");
+    fs_err_print(path);
   }
+  #endif
 
   return file_close(fd) && res;
 }
 
 bool file_append_bytes(FILE* fd, char* data, size_t len) {
   size_t wrote = fwrite(data, 1, len, fd);
+
   if (wrote != len) {
-    perror("Couldn't append all data");
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("File descriptor %d", fileno(fd)));
+    #endif
     return false;
   }
 
@@ -118,38 +172,44 @@ bool file_append_bytes(FILE* fd, char* data, size_t len) {
 
 bool file_delete(char* src) {
   int res = remove(src) == 0;
-  if (!res) perror("Couldn't remove file");
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
   return res;
 }
 
 bool file_move(char* src, char* dst) {
   int res = rename(src, dst) == 0;
-  if (!res) perror("Couldn't rename file");
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
   return res;
 }
 
-#ifdef _WIN32
-static void perror_windows(const char* msg) {
-  DWORD err = GetLastError();
-  static char buf[512];
 
-  DWORD len = FormatMessage(
-    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-    NULL,
-    err,
-    LANG_SYSTEM_DEFAULT,
-    buf, 512,
-    NULL
-  );
+// #ifdef _WIN32
+// static void perror_windows(const char* msg) {
+//   DWORD err = GetLastError();
+//   static char buf[512];
 
-  if (len == 0) {
-    fprintf(stderr, "%s: couldn't get error message from Windows for error ID %ld\n", msg, err);
-  } else {
-    while (len > 0 && isspace(buf[len-1])) buf[len--] = '\0';
-    fprintf(stderr, "%s: %s\n", msg, buf);
-  }
-}
-#endif
+//   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
+//   DWORD len = FormatMessage(
+//     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+//     NULL,
+//     err,
+//     LANG_SYSTEM_DEFAULT,
+//     buf, 512,
+//     NULL
+//   );
+
+//   if (len == 0) {
+//     fprintf(stderr, "%s: couldn't get error message from Windows for error ID %ld\n", msg, err);
+//   } else {
+//     while (len > 0 && isspace(buf[len-1])) buf[len--] = '\0';
+//     fprintf(stderr, "%s: %s\n", msg, buf);
+//   }
+// }
+// #endif
 
 /////////////////////
 
@@ -172,7 +232,7 @@ char* path_filename(char* path) {
 
 char* path_extension(char* path) {
   char* res = strrchr(path, '.');
-  if (res == NULL) return res;
+  if (res == NULL) return "";
   return res + 1;
 }
 
@@ -188,23 +248,30 @@ str path_parent(char* path) {
   return str_from_cstr_unchecked(path, parent_start - path);
 }
 
+// TODO: Should this return NULL on error?
 char* path_to_absolute(char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
   char* res = realpath(path, NULL);
-  if (res == NULL) perror("Couldn't get absolute path");
+  #ifdef STC_LOG_ERR
+  if (res == NULL) fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
+  #endif
   return res;
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
   DWORD path_size = GetFullPathName(path, 0, NULL, NULL);
   if (path_size == 0) {
-    perror_windows("Couldn't calculate absolute path length");
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp( "Failed to get absolute path length for relative path %s", path));
+    #endif
     return NULL;
   }
   char* buf = malloc(path_size);
   DWORD res = GetFullPathName(path, path_size, buf, NULL);
   if (res == 0) {
-    perror_windows("Couldn't get absolute path");
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
+    #endif
     return NULL;
   }
   return buf;
@@ -281,7 +348,6 @@ bool path_set_extension(String* sb, char* extension) {
 
 /////////////////////
 
-
 typedef enum {
   FileType_Other,
   FileType_File,
@@ -309,12 +375,21 @@ typedef struct {
 DirRead dir_open(char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
+
+  #ifdef STC_LOG_ERR
+  if (dir_fd == -1) {
+    fs_err_print(dirpath);
+  }
+  #endif
+
   // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
   DIR* dir = fdopendir(dir_fd);
 
+  #ifdef STC_LOG_ERR
   if (dir == NULL) {
-    perror("Couldn't open directory for reading entries");
+    fs_err_print(dirpath);
   }
+  #endif
 
   return (DirRead) { dir_fd, dir };
 #else
@@ -324,16 +399,35 @@ DirRead dir_open(char* dirpath) {
   // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
   WIN32_FIND_DATA data;
   HANDLE h = FindFirstFile(buf, &data);
+
+  #ifdef STC_LOG_ERR
   if (h == INVALID_HANDLE_VALUE) {
-    perror_windows("Couldn't open directory for reading entries");
+    fs_err_print(dirpath);
   }
+  #endif
+
   return (DirRead) { data, h };
 #endif
 }
 
-DirEntry dir_read(DirRead* it) {
+bool dir_close(DirRead* it) {
 #ifndef _WIN32
+  bool res = closedir(it->dir) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
+  #endif
+#else
+  bool res = FindClose(it->h) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
+  #endif
+#endif
+  return res;
+}
+
+DirEntry dir_read(DirRead* it) {
   DirEntry entry = {0};
+#ifndef _WIN32
   int prev_err = errno;
   
   struct dirent* dp;
@@ -342,9 +436,11 @@ DirEntry dir_read(DirRead* it) {
     dp = readdir(it->dir);
 
     if (dp == NULL) {
-      if (prev_err != errno) {
-        perror("Couldn't read all directory entries");
-      }
+      #ifdef STC_LOG_ERR
+      if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
+      #endif
+
+      dir_close(it);
       return entry;
     }
 
@@ -354,8 +450,12 @@ DirEntry dir_read(DirRead* it) {
   struct stat statbuf;
   int fd = openat(it->dir_fd, filename, O_RDONLY);
   if (fstat(fd, &statbuf) != 0) {
-    printf("Bad filename %s\n", filename);
-    perror("Couldn't read file during directory scan");
+    #ifdef STC_LOG_ERR
+      fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
+    #endif
+    // printf("Bad filename %s\n", filename);
+    // perror("Couldn't read file during directory scan");
+
     return entry;
   }
 
@@ -369,25 +469,31 @@ DirEntry dir_read(DirRead* it) {
   }
 
   if (close(fd) != 0) {
-    perror("Couldn't close file during directory scan");
+    #ifdef STC_LOG_ERR
+    fs_err_print(entry.name);
+    #endif
   };
 #else
   char* filename;
   do {
     bool res = FindNextFile(it->h, &it->data) != 0;
     if (!res) {
+      #ifdef STC_LOG_ERR
       if (GetLastError() != ERROR_NO_MORE_FILES) {
-        perror_windows("Couldn't read all directory entries");
+        fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
       }
+      #endif
+
+      dir_close(it);
       return entry;
     }
 
-    filename = data.cFileName;
+    filename = it->data.cFileName;
   } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
 
   entry.name = strdup(filename);
   entry.parent = path_to_absolute(entry.name);
-  switch (data.dwFileAttributes) {
+  switch (it->data.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
     default: entry.type = FileType_File; break;
   }
@@ -395,24 +501,15 @@ DirEntry dir_read(DirRead* it) {
   return entry;
 }
 
-bool dir_close(DirRead* it) {
-#ifndef _WIN32
-  bool res = closedir(it->dir) == 0;
-  if (!res) perror("Couldn't close directory after completed scan");
-#else
-  bool res = FindClose(h) == 0;
-  if (!res) perror_windows("Coudln't close directory find");
-#endif
-  return res;
-}
 
 list_def(DirEntry, DirEntries)
-void DirEntries_free(DirEntries* entries) {
+void DirEntries_drop(DirEntries* entries) {
   listforeach(DirEntry, e, entries) free(e->name);
   free(entries->data);
 }
 
 // TODO: enable entries sorting
+// TODO: rewrite in terms of dir_open() and dir_read()
 DirEntries dir_read_collect(char* dirpath) {
   DirEntries entries = {0};
   DirEntry entry = {0};
@@ -422,7 +519,9 @@ DirEntries dir_read_collect(char* dirpath) {
   DIR* d = fdopendir(dir_fd);
 
   if (d == NULL) {
-    perror("Couldn't open directory for reading entries");
+    #ifdef STC_LOG_ERR
+    fs_err_print(dirpath);
+    #endif
     return entries;
   }
   
@@ -438,7 +537,9 @@ DirEntries dir_read_collect(char* dirpath) {
 
     int fd = openat(dir_fd, filename, O_RDONLY);
     if (fstat(fd, &statbuf) != 0) {
-      perror("Couldn't read file during directory scan");
+      #ifdef STC_LOG_ERR
+        fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+      #endif
       continue;
     }
 
@@ -453,14 +554,16 @@ DirEntries dir_read_collect(char* dirpath) {
 
     DirEntries_push(&entries, entry);
     if (close(fd) != 0) {
-      perror("Coudln't close file during directory scan");
+      #ifdef STC_LOG_ERR
+      fs_err_print(entry.name);
+      #endif
       continue;
     };
   }
 
-  if (prev_err != errno) {
-    perror("Couldn't read all directory entries");
-  }
+    #ifdef STC_LOG_ERR
+    if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+    #endif
 
   // struct dirent **entries;
   // int n = scandir(".", &entries, 0, alphasort);
@@ -473,7 +576,9 @@ DirEntries dir_read_collect(char* dirpath) {
   // }
 
   if (closedir(d) != 0) {
-    perror("Couldn't close directory after completed scan");
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+    #endif
   };
 #else
   char buf[PATH_MAX_LEN];
@@ -483,7 +588,9 @@ DirEntries dir_read_collect(char* dirpath) {
   WIN32_FIND_DATA data;
   HANDLE h = FindFirstFile(buf, &data);
   if (h == INVALID_HANDLE_VALUE) {
-    perror_windows("Couldn't open directory for reading entries");
+    #ifdef STC_LOG_ERR
+    fs_err_print(dirpath);
+    #endif
     return entries;
   }
 
@@ -502,16 +609,22 @@ DirEntries dir_read_collect(char* dirpath) {
   } while(FindNextFile(h, &data) != 0);
   
   if (GetLastError() != ERROR_NO_MORE_FILES) {
-    perror_windows("Couldn't read all directory entries");
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Dir handle %p", h));
+    #endif
   }
 
   if (FindClose(h) == 0) {
-    perror_windows("Coudln't close directory find");
-  };
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Dir handle %p", h));
+    #endif
+  }
 #endif
 
   return entries;
 }
+
+/////////////////////
 
 bool file_exists(char* path) {
 #ifndef _WIN32
@@ -539,7 +652,9 @@ FileType file_type(char* path) {
 #ifndef _WIN32
   struct stat buf;
   if (stat(path, &buf) != 0) {
-    perror("Couldn't open file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return FileType_Other;
   }
   
@@ -552,7 +667,9 @@ FileType file_type(char* path) {
 #else
   DWORD attribs = GetFileAttributes(path);
   if (attribs == INVALID_FILE_ATTRIBUTES) {
-    perror_windows("Couldn't open file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return FileType_Other;
   }
 
@@ -567,10 +684,16 @@ static char cwd[PATH_MAX_LEN];
 char* dir_current() {
 #ifndef _WIN32
   char* res = getcwd(cwd, PATH_MAX_LEN);
-  if (res == NULL) perror("Couldn't get working directory");
+  #ifdef STC_LOG_ERR
+  if (res == NULL) fs_err_print(str_fmt_tmp("Failed to get working directory"));
+  #endif
   return res;
 #else
-  if (GetCurrentDirectory(PATH_MAX_LEN, cwd) == 0) perror_windows("Couldn't get working directory");
+  if (GetCurrentDirectory(PATH_MAX_LEN, cwd) == 0) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get working directory"));
+    #endif
+  }
   return cwd;
 #endif
 }
@@ -578,13 +701,13 @@ char* dir_current() {
 bool dir_set_current(char* path) {
 #ifndef _WIN32
   bool res = chdir(path) == 0;
-  if (!res) perror("Couldn't set working directory");
 #else
   bool res = SetCurrentDirectory(path) != 0;
-  if (!res) {
-    perror_windows("Couldn't set working directory");
-  }
 #endif
+
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(str_fmt_tmp("Failed to set working directory"));
+  #endif
   return res;
 }
 
@@ -593,18 +716,17 @@ bool dir_create_if_not_exists(char* path) {
   
 #ifndef _WIN32
   bool res = mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO) == 0;
-  if (!res) perror("Couldn't create directory");
-  return res;
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createdirectorya?redirectedfrom=MSDN
   bool res = CreateDirectory(path, NULL) != 0;
-  if (!res) perror_windows("Couldn't create directory");
-  return res;
 #endif
+
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(path);
+  #endif
+  return res;
 }
 
-
-static String fs_tmp_sb = {0};
 bool dir_create_recursive(char* path) {
   fs_tmp_sb.len = 0;
   StrList components = path_components(path);
@@ -623,10 +745,11 @@ bool dir_create_recursive(char* path) {
     }
   }
 
-  StrList_drop(&components);
+  StrList_free(&components);
   return !had_error;
 }
 
+// TODO
 void dir_walk(char* dirpath) {
   DirRead it = dir_open(dirpath);
   DirEntry e = dir_read(&it);
@@ -641,7 +764,7 @@ void dir_walk(char* dirpath) {
         printf("Reading %s\n", e.name);
         String_append_null(&sb);
         str_dbg(sb);
-        String_format(&sb, "hello %s %s %s", sb.data, e.name, sb.data);
+        String_fmt(&sb, "hello %s %s %s", sb.data, e.name, sb.data);
         str_dbg(sb);
         printf("%s\n", e.name);
         // dir_walk(sb.data); 
@@ -666,13 +789,15 @@ bool dir_delete_if_exists(char* path) {
   
   #ifndef _WIN32
     bool res = rmdir(path) == 0;
-    if (!res) perror("Couldn't remove directory");
-    return res;
   #else
     bool res = RemoveDirectory(path) != 0;
-    if (!res) perror_windows("Couldn't remove directory");
-    return res;
   #endif
+
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(path);
+  #endif
+
+  return res;
 }
 
 bool dir_delete_contents(char* path) {
@@ -709,23 +834,30 @@ bool file_create_if_not_exists(char* path) {
   // https://man7.org/linux/man-pages/man2/open.2.html
   int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
   if (fd == -1) {
-    perror("Couldn't create file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return false;
   }
   if (close(fd) != 0) {
-    perror("Couldn't close created file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return false;
   }
 #else
   // https://learn.microsoft.com/it-it/windows/win32/api/fileapi/nf-fileapi-createfilea
-  printf("Creating file: %s\n", path);
   HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
   if (h == INVALID_HANDLE_VALUE) {
-    perror_windows("Couldn't create file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return false;
   }
   if (CloseHandle(h) == 0) {
-    perror_windows("Couldn't close created file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
     return false;
   }
 #endif
@@ -738,14 +870,22 @@ bool file_create_recursive(char* path) {
   fs_tmp_sb.len = 0;
   String_append_str(&fs_tmp_sb, parent);
   String_append_null(&fs_tmp_sb);
-  bool dir_res = dir_create_recursive(fs_tmp_sb.data);
-  return dir_res && file_create_if_not_exists(path);
+
+  return dir_create_recursive(fs_tmp_sb.data) 
+    && file_create_if_not_exists(path);
 }
 
 // TODO: add flag to choose if should overwrite
 bool file_copy(char* src, char* dst) {
 #ifndef _WIN32
   int src_fd = open(src, O_RDONLY, 0);
+
+  if (src_fd == -1) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(src);
+    #endif
+    return false;
+  }
 
   // bool overwrite = false;
   // int flags = 0;
@@ -755,14 +895,18 @@ bool file_copy(char* src, char* dst) {
 
   int dst_fd = open(dst, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
 
-  if (src_fd == -1 || dst_fd == -1) {
-    perror("Couldn't open either src or dst");
+  if (dst_fd == -1) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(dst);
+    #endif
     return false;
   }
 
   struct stat statbuf;
   if (fstat(src_fd, &statbuf) != 0) {
-    perror("Couldn't get src file size");
+    #ifdef STC_LOG_ERR
+    fs_err_print(src);
+    #endif
     return false;
   }
   size_t src_size = statbuf.st_size;
@@ -771,17 +915,23 @@ bool file_copy(char* src, char* dst) {
   // https://man7.org/linux/man-pages/man2/sendfile.2.html
   if (sendfile(dst_fd, src_fd, NULL, src_size) == -1) {
   // if (copy_file_range(src_fd, NULL, dst_fd, NULL, src_size, 0) == -1) {
-    perror("Couldn't copy src file to dst file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(dst);
+    #endif
     return false;
   }
 
   if (close(src_fd) != 0) {
-    perror("Coudlnt close src file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(src);
+    #endif
     return false;
   }
 
   if (close(dst_fd) != 0) {
-    perror("Coudlnt close dst file");
+    #ifdef STC_LOG_ERR
+    fs_err_print(dst);
+    #endif
     return false;
   }
 
@@ -789,7 +939,9 @@ bool file_copy(char* src, char* dst) {
 #else
   // https://learn.microsoft.com/it-it/windows/win32/api/winbase/nf-winbase-copyfile
   BOOL res = CopyFile(src, dst, false);
-  if (!res) perror_windows("Couldn't copy src file to dst file");
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(dst);
+  #endif
   return res;
 #endif
 }
