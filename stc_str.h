@@ -499,13 +499,26 @@ char* str_fmt_tmp(char* fmt, ...) {
 }
 
 String String_fmt(String* sb, char* fmt, ...) {
+  // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
+  // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
+
   va_list args;
   va_start(args, fmt);
-  str_fmt_tmp(fmt, args);
+  int real_size = vsnprintf(NULL, 0, fmt, args);
+  va_end(args);
+
+  // real_size excludes null
+  String_reserve(&tmp_sb, real_size+1);
+  
+  va_start(args, fmt);
+  // should write_real_size + null
+  // be sure to set tmp_sb.len!
+  tmp_sb.len = vsnprintf(tmp_sb.data, real_size+1, fmt, args);
   va_end(args);
 
   sb->len = 0;
   String_append_cstr(sb, tmp_sb.data);
+
   return *sb;
 }
 

@@ -214,7 +214,6 @@ bool file_move(char* src, char* dst) {
 /////////////////////
 
 // TODO: consider making path a sperate type
-// TODO: should we check for null?
 // https://doc.rust-lang.org/std/path/struct.Path.html
 
 char* path_last_component(char* path) {
@@ -778,10 +777,10 @@ void dir_walk(char* dirpath) {
   dir_close(&it);
 }
 
+// TODO:
 // ?? nob_file_metadata(const char *path, bool follow_links);
-// bool nob_mkdir_if_not_exists_recursive(const char *path);
-// bool nob_rmdir_if_exists_recursive(const char *path);
 // bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
+// bool nob_rmdir_if_exists_recursive(const char *path);
 // bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 
 bool dir_delete_if_exists(char* path) {
@@ -944,6 +943,10 @@ bool file_copy(char* src, char* dst) {
   #endif
   return res;
 #endif
+}
+
+bool dir_copy_recursive(char* src, char* dst) {
+  // TODO
 }
 
 #endif

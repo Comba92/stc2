@@ -178,5 +178,11 @@ int main() {
     str_dbg(split);
   }
 
+  String fmt = SB("Welcome back my friend to the show that never ends!");
+  printf("Fmt contents: %s\n", fmt.data);
+  printf("Test: %s\n", &fmt.data);
+  String_fmt(&fmt, "Overwriting the text with fmt... %s", fmt.data);
+  str_dbg(fmt);
+
   printf("Done\n");
 }
