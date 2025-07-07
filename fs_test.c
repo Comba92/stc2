@@ -14,7 +14,7 @@ int main() {
 
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
-    printf("%s\t%s %d\n", e->parent, e->name, e->type);
+    printf("%s\t%s %d\n", e->path, e->name, e->type);
   }
 
   
@@ -23,13 +23,15 @@ int main() {
   DirEntry e = {0};
   do {
     e = dir_read(&it);
-    printf("%s\t%s %d\n", e.parent, e.name, e.type);
+    printf("%s\t%s %d\n", e.path, e.name, e.type);
   } while (e.name != NULL);
   dir_close(&it);
   
   dir_read_collect("/home/comba/");
   dir_read_collect("..");
-  dir_walk(".");
+
+  // printf("\nDir Walk:\n");
+  // dir_walk(".");
 
   printf("%d\n", file_exists("./test.txt"));
   printf("%d\n", file_exists("./faggot_killer.txt"));
@@ -37,11 +39,14 @@ int main() {
   printf("%d\n", dir_exists("../stc"));
   printf("%d\n", dir_exists("../urmom"));
 
-  dir_create_if_not_exists("./test1");
+  dir_create("./test1");
   dir_create_recursive("./test2/daaaaa/dsadasad/adasdas");
-  dir_delete_if_exists("./test1");
+  dir_delete("./test1");
 
   file_create_recursive("./test3/kysfag/hahahah/test");
+  printf("test3 dir created\n");
+  dir_delete_recursive("./test3/");
+  printf("test3 dir deleted\n");
 
   printf("Working dir: %s\n", dir_current());
   printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt"));

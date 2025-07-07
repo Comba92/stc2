@@ -56,6 +56,7 @@ type name##_last(name l) { \
 } \
  \
 type name##_pop(name* l) { \
+  assert(l->len > 0 && "popped empty list"); \
   return l->data[--l->len]; \
 } \
  \
