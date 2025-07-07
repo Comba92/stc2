@@ -4,6 +4,19 @@
 #define res_dbg(s) printf("%d > " #s "\n", (int) (s));
 
 int main() {
+  printf("Types sizes in bytes:\nchar = %ld\nshort = %ld\nint = %ld\nlong = %ld\nlong int %ld\nlong long %ld\nlong long int %ld\nsize_t %ld\nfloat %ld\ndouble %ld\n",
+    sizeof(char),
+    sizeof(short),
+    sizeof(int),
+    sizeof(long),
+    sizeof(long int),
+    sizeof(long long),
+    sizeof(long long int),
+    sizeof(size_t),
+    sizeof(float),
+    sizeof(double)
+  );
+
   str s = str_from_cstr("Hello World!");
   printf("String of len %ld says %s\n", s.len, str_to_cstr(s));
   str_dbg(s);
@@ -142,7 +155,8 @@ int main() {
 
   str_dbg(str_join(&ls, SV(", "), sl));
 
-  str_dbg(String_format(&ls, "Kys %d times stupid faggot %s", 100, "killer"));
+  String_fmt(&ls, "Kys %d times stupid faggot %s", 100, "killer");
+  str_dbg(ls);
   str_dbg(int_to_str(&ls, 20));
   str_dbg(float_to_str(&ls, 20.23));
 

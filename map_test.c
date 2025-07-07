@@ -9,11 +9,11 @@ map_def(int, IntMap)
 int main() {
   IntMap m = {0};
 
-  printf("%d\n", IntMap_contains(m, STR("20")));
+  printf("%d\n", IntMap_contains(m, SV("20")));
 
   String sb = {0};
   rangefor(int, i, 0, 100) {
-    IntMap_insert(&m, STRB(int_to_str(&sb, i)), i);
+    IntMap_insert(&m, SBV(int_to_str(&sb, i)), i);
     printf("Inserted %d\n", i);
   }
 
@@ -24,18 +24,18 @@ int main() {
     printf("\"" str_fmt"\" = %d\n", str_arg(e.key), e.val);
   }
 
-  printf("%d\n", *IntMap_get(m, STR("20")));
-  printf("%d\n", *IntMap_get(m, STR("45")));
-  printf("%d\n", *IntMap_get(m, STR("69")));
+  printf("%d\n", *IntMap_get(m, SV("20")));
+  printf("%d\n", *IntMap_get(m, SV("45")));
+  printf("%d\n", *IntMap_get(m, SV("69")));
 
-  printf("%d\n", IntMap_remove(&m, STR("20")));
-  printf("%d\n", IntMap_remove(&m, STR("43")));
-  printf("%d\n", IntMap_remove(&m, STR("44")));
-  printf("%d\n", IntMap_remove(&m, STR("45")));
-  printf("%d\n", IntMap_remove(&m, STR("46")));
-  printf("%d\n", IntMap_remove(&m, STR("47")));
-  printf("%d\n", IntMap_remove(&m, STR("69")));
-  printf("%d\n", IntMap_remove(&m, STR("fag")));
+  printf("%d\n", IntMap_remove(&m, SV("20")));
+  printf("%d\n", IntMap_remove(&m, SV("43")));
+  printf("%d\n", IntMap_remove(&m, SV("44")));
+  printf("%d\n", IntMap_remove(&m, SV("45")));
+  printf("%d\n", IntMap_remove(&m, SV("46")));
+  printf("%d\n", IntMap_remove(&m, SV("47")));
+  printf("%d\n", IntMap_remove(&m, SV("69")));
+  printf("%d\n", IntMap_remove(&m, SV("fag")));
 
   rangefor(int, i, 0, m.cap) {
     IntMapEntry e = m.entries[i];
@@ -43,11 +43,11 @@ int main() {
     else printf("Bucket %d removed\n", i);
   }
 
-  IntMap_insert(&m, STRB(int_to_str(&sb, 45)), 45);
-  IntMap_insert(&m, STRB(int_to_str(&sb, 46)), 46);
-  IntMap_insert(&m, STRB(int_to_str(&sb, 44)), 44);
-  IntMap_insert(&m, STRB(int_to_str(&sb, 43)), 43);
-  IntMap_insert(&m, STRB(int_to_str(&sb, 47)), 47);
+  IntMap_insert(&m, SBV(int_to_str(&sb, 45)), 45);
+  IntMap_insert(&m, SBV(int_to_str(&sb, 46)), 46);
+  IntMap_insert(&m, SBV(int_to_str(&sb, 44)), 44);
+  IntMap_insert(&m, SBV(int_to_str(&sb, 43)), 43);
+  IntMap_insert(&m, SBV(int_to_str(&sb, 47)), 47);
 
   printf("\n====\n\n");
   rangefor(int, i, 0, m.cap) {
@@ -58,5 +58,5 @@ int main() {
 
   printf("Buckets: %lld, Collisions count: %lld - Biggest collision: %lld\n", m.len, m.collisions, m.biggest_collision_chain);
 
-  IntMap_drop(&m);
+  IntMap_free(&m);
 }

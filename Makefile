@@ -1,0 +1,19 @@
+all: fs str list map grep bench
+
+fs: fs_test.c
+	gcc fs_test.c -o fs_test
+
+str: str_test.c
+	gcc str_test.c -o str_test
+
+list: list_test.c
+	gcc list_test.c -o list_test
+
+map: map_test.c
+	gcc map_test.c -o map_test
+
+grep: grep.c
+	gcc grep.c -o grep
+
+bench: bench.c
+	gcc bench.c -o bench

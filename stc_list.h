@@ -6,7 +6,7 @@
 #include <string.h>
 #include <assert.h>
 
-#define rangefor(type, it, start, end) for (type it = (start); it < end; ++it)
+#define rangefor(type, it, start, end) for (type it = (start); it < (end); ++it)
 #define listfor(type, it, list) for (type it = 0; it < (list)->len; ++it)
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
@@ -141,7 +141,7 @@ void name##_append_array(name* l, type* arr, size_t arr_len) { \
   l->len += arr_len; \
 } \
  \
-void name##_drop(name* l) { \
+void name##_free(name* l) { \
   free(l->data); \
   l->cap = 0; \
   l->len = 0; \
@@ -268,7 +268,7 @@ void list_append_array(List<T>* l, T* arr, size_t arr_len) {
   l->len += arr_len;
 }
 
-void list_drop(List<T>* l) {
+void list_free(List<T>* l) {
   free(l->data);
   l->cap = 0;
   l->len = 0;

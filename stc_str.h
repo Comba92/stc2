@@ -307,8 +307,6 @@ StrList str_words_collect(str s) {
 
 //////////////////////
 
-// TODO: iterators aren't fleshed out yet
-
 #define iter_done(it) ((it).src.len == 0)
 
 typedef struct {
@@ -481,8 +479,8 @@ char* String_to_cstr(String sb) {
 }
 
 static String tmp_sb = {0};
-String String_format(String* sb, char* fmt, ...) {
-  // TODO: this is buggy af
+
+char* str_fmt_tmp(char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   int real_size = vsnprintf(NULL, 0, fmt, args);
@@ -491,19 +489,25 @@ String String_format(String* sb, char* fmt, ...) {
   // real_size excludes null
   String_reserve(&tmp_sb, real_size+1);
   
-  tmp_sb.len = 0;
   va_start(args, fmt);
   // should write_real_size + null
-  vsnprintf(tmp_sb.data, real_size+1, fmt, args);
+  // be sure to set tmp_sb.len!
+  tmp_sb.len = vsnprintf(tmp_sb.data, real_size+1, fmt, args);
   va_end(args);
-  
-  str_dbg(tmp_sb);
-  sb->len = 0;
-  String_append(sb, tmp_sb);
-  return *sb;
+
+  return tmp_sb.data;
 }
 
+String String_fmt(String* sb, char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  str_fmt_tmp(fmt, args);
+  va_end(args);
 
+  sb->len = 0;
+  String_append_cstr(sb, tmp_sb.data);
+  return *sb;
+}
 
 int str_parse_int(str s) {
   String_reserve(&tmp_sb, s.len+1);
@@ -525,11 +529,11 @@ double str_parse_float(str s) {
 }
 
 String int_to_str(String* sb, int n) {
-  return String_format(sb, "%d", n);
+  return String_fmt(sb, "%d", n);
 }
 
 String float_to_str(String* sb, double n) {
-  return String_format(sb, "%f", n);
+  return String_fmt(sb, "%f", n);
 }
 
 // TODO: this is possibly dangerous, as the returned string has to be freed. 
@@ -597,7 +601,7 @@ String str_replace(String* sb, str sv, str from, str to) {
 //     last = *match + from.len;
 //   }
 //   String_append_str(sb, str_skip(sv, last));
-//   IntList_drop(&matches);
+//   IntList_free(&matches);
 
 //   return *sb;
 // }

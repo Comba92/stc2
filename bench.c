@@ -6,7 +6,7 @@ map_def(int, IntMap)
 
 int main() {
   char* file = file_read_to_string("./bigfile.txt");
-  StrList words = str_words(STR(file));
+  StrList words = str_words_collect(SV(file));
   printf("File words count = %lld\n", words.len);
 
   // size_t count = 0;

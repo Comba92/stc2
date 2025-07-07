@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     }
   }
   
-  StrList_drop(&lines);
-  String_drop(&lower);
+  StrList_free(&lines);
+  String_free(&lower);
   free(contents);
 }

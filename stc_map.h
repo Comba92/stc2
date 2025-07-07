@@ -178,7 +178,7 @@ bool name##_remove(name* m, str key) { \
   } \
 } \
  \
-void name##_drop(name* m) { \
+void name##_free(name* m) { \
   /* keys are owned, free them */ \
   for (int i=0; i<m->cap; ++i) { \
     str key = m->entries[i].key; \
@@ -311,7 +311,7 @@ void name##_drop(name* m) { \
     return (double) m.len / (double) m.cap;
   }
 
-  void map_drop(Map<T>* m) {
+  void map_free(Map<T>* m) {
     // keys are owned, free them
     for (int i=0; i<m->cap; ++i) {
       char* key = m->entries[i].key;
