@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <assert.h>
 
+// TODO: it is time to check for const cstr, static strings size can be found with sizeof! 
 // TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   size_t len;

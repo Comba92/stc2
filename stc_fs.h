@@ -80,15 +80,12 @@ static FILE* file_open(char* path, const char* opts) {
 }
 
 FILE* file_open_read(char* path) {
+  // opening files without binary mode is utterly retarded
   return file_open(path, "rb");
 }
 
 FILE* file_open_write(char* path) {
   return file_open(path, "wb");
-}
-
-FILE* file_open_append(char* path) {
-  return file_open(path, "ab");
 }
 
 bool file_close(FILE* f) {
@@ -158,19 +155,6 @@ bool file_write_bytes(char* path, char* data, size_t len) {
   #endif
 
   return file_close(fd) && res;
-}
-
-bool file_append_bytes(FILE* fd, char* data, size_t len) {
-  size_t wrote = fwrite(data, 1, len, fd);
-
-  if (wrote != len) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("File descriptor %d", fileno(fd)));
-    #endif
-    return false;
-  }
-
-  return true;
 }
 
 /////////////////////

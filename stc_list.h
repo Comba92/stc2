@@ -94,7 +94,7 @@ void name##_swap(name* l, size_t a, size_t b) { \
 void name##_shuffle(name* l) { \
   /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
   srand(time(NULL)); \
-  for(int i=l->len-1; i>=0; --i) { \
+  for(int i=l->len-1; i>0; --i) { \
     int r = rand() % (i+1); \
     name##_swap(l, i, r); \
   } \
