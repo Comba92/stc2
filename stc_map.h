@@ -12,6 +12,7 @@ char* const MAP_ENTRY_REMOVED = (char*) 1;
 
 // TODO: map iterator
 // TODO: can search be merged into one?
+// TODO: replace operation map_replace(m, old_key, new_key, value) ?
 
 // https://theartincode.stanis.me/008-djb2/
 long djb2(char *s, size_t len)
@@ -52,21 +53,21 @@ bool map_key_is_marker(str key) {
   return map_key_is_empty(key) || map_key_is_removed(key);
 }
 
-#define map_def(type, name, entrynm) \
+#define map_def(type, name) \
 typedef struct { \
   str key; \
   type val; \
-} entrynm; \
+} name##Entry; \
  \
 typedef struct { \
   size_t cap, len; \
-  entrynm* entries; \
+  name##Entry* entries; \
  \
 } name; \
  \
-entrynm* name##_search(name* m, str key) { \
+name##Entry* name##_search(name* m, str key) { \
   size_t i = map_hash_key(key, m->cap); \
-  entrynm* e = &m->entries[i]; \
+  name##Entry* e = &m->entries[i]; \
  \
   size_t retries = 0; \
   while (!map_key_is_empty(e->key) && retries < m->cap) { \
@@ -79,10 +80,10 @@ entrynm* name##_search(name* m, str key) { \
   return NULL; \
 } \
  \
-entrynm* name##_search_for_insert(name* m, str key) { \
+name##Entry* name##_search_for_insert(name* m, str key) { \
   /* invariant: this can't fail to find an entry, as we always increase cap first */ \
   size_t i = map_hash_key(key, m->cap); \
-  entrynm* e = &m->entries[i]; \
+  name##Entry* e = &m->entries[i]; \
  \
   size_t retries = 0; \
   while (!map_key_is_empty(e->key)) { \
@@ -101,7 +102,7 @@ void name##_reserve(name* m, size_t new_cap) { \
     new_map.cap = m->cap == 0 ? 16 : m->cap; \
     while (new_cap > new_map.cap) new_map.cap *= 2; \
  \
-    new_map.entries = malloc(sizeof(entrynm) * new_map.cap); \
+    new_map.entries = malloc(sizeof(name##Entry) * new_map.cap); \
     assert(new_map.entries != NULL && "map realloc failed"); \
      \
     /* set all buckets to empty */ \
@@ -112,9 +113,9 @@ void name##_reserve(name* m, size_t new_cap) { \
  \
     /* rehash */ \
     for(int i=0; i<m->cap; ++i) { \
-      entrynm* e = &m->entries[i]; \
+      name##Entry* e = &m->entries[i]; \
       if (!map_key_is_marker(e->key)) { \
-        entrynm* new_entry = name##_search_for_insert(&new_map, e->key); \
+        name##Entry* new_entry = name##_search_for_insert(&new_map, e->key); \
         new_entry->key = e->key; \
         new_entry->val = e->val; \
       } \
@@ -131,7 +132,7 @@ void name##_reserve(name* m, size_t new_cap) { \
 int* name##_get(name* m, str key) { \
   if (m->len == 0) return NULL; \
    \
-  entrynm* e = name##_search(m, key); \
+  name##Entry* e = name##_search(m, key); \
   if (e == NULL) return NULL; \
   return &e->val; \
 } \
@@ -142,7 +143,7 @@ bool name##_contains(name* m, str key) { \
  \
 bool name##_insert(name* m, str key, int val) { \
   name##_reserve(m, m->len+1); \
-  entrynm* e = name##_search_for_insert(m, key); \
+  name##Entry* e = name##_search_for_insert(m, key); \
   e->val = val; \
  \
   if (map_key_is_empty(e->key)) { \
@@ -159,7 +160,7 @@ bool name##_insert(name* m, str key, int val) { \
  \
 bool name##_remove(name* m, str key) { \
   if (m->len == 0) return false; \
-  entrynm* e = name##_search(m, key); \
+  name##Entry* e = name##_search(m, key); \
   if (e == NULL) { \
     return false; \
   } else { \
@@ -187,6 +188,20 @@ void name##_free(name* m) { \
   m->cap = 0; \
   m->entries = NULL; \
 } \
+typedef struct {
+  name* src;
+  size_t curr;
+  size_t skipped;
+} name##Iter;
+
+name##Iter name##_iter(name* m) {
+  name##Iter it = { m, 0, 0 };
+  // TODO: fetch first value
+} 
+
+type* name##_next(name##Iter* it) {
+  // TODO: fetch next value
+}
 
 typedef struct {
   size_t cap, len;
@@ -340,10 +355,15 @@ bool Set_is_superset(Set* this, Set* other) {
 }
 
 bool Set_is_subset(Set* this, Set* other) {
+  
+}
 
+bool Set_is_disjoint(Set* this, Set* other) {
+  // Returns true if this has no elements in common with other
+  // same as checking for empty intersection
 }
 
 // https://doc.rust-lang.org/std/collections/struct.HashSet.html
-// TODO: union, intersection, symmetric_difference, is_subset, is_superset
+// TODO: union, intersection, difference, symmetric_difference
 
 #endif
