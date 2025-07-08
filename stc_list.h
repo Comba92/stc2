@@ -36,7 +36,7 @@ void name##_resize(name* l, size_t new_len, type value) { \
     for (int i=0; i<range; ++i) { \
       l->data[l->len + i] = value; \
     } \
-    l->len = new_len;
+    l->len = new_len; \
   } \
 } \
  \

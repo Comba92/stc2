@@ -1,7 +1,6 @@
 #define STC_LOG_ERR
 #include "stc_fs.h"
 
-
 int main() {
   file_read_to_string("fag.txt");
   file_read_to_string("test.txt");
@@ -10,25 +9,26 @@ int main() {
   printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));
 
   DirEntries entries = {0};
-  entries = dir_read_collect(".");
+  entries = dir_entries(".");
 
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
-    printf("%s\t%s %d\n", e->path, e->name, e->type);
+    printf("%s %d\n", e->name, e->type);
   }
-
   
   printf("\nDir iterator\n");
+
   DirRead it = dir_open(".");
-  DirEntry e = {0};
-  do {
-    e = dir_read(&it);
-    printf("%s\t%s %d\n", e.path, e.name, e.type);
-  } while (e.name != NULL);
-  dir_close(&it);
+  dir_iter(entry, &it) {
+    printf("%s\n", entry->name);
+  }
   
-  dir_read_collect("/home/comba/");
-  dir_read_collect("..");
+  dir_entries("/home/comba/");
+  entries = dir_entries("..");
+  printf("Entries collected = %ld\n", entries.len);
+  listforeach(DirEntry, e, &entries) {
+    printf("%s %d\n", e->name, e->type);
+  }
 
   // printf("\nDir Walk:\n");
   // dir_walk(".");
@@ -61,4 +61,7 @@ int main() {
 
   printf("Absolute path: %s\n", path_to_absolute("kys.txt"));
   str_dbg(path_parent("./dada/dasdad/.weqrwq.rwq/rqwr.q/kys.txt"));
+
+  dir_copy_recursive("./test_copy", "./test_copy_del");
+  printf("Delete had errors: %d\n", dir_delete_recursive("./test_copy_del"));
 }

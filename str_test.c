@@ -161,19 +161,19 @@ int main() {
   str_dbg(float_to_str(&ls, 20.23));
 
   StrLines it1 = str_lines(SV("abc\nbcd\ncde\ndefg"));
-  while (!(iter_done(it1))) {
+  while (!(str_iter_done(it1))) {
     str line = str_next_line(&it1);
     str_dbg(line);
   }
 
   StrSplitChar it2 = str_splitc(SV("abc,,bcd,cde,defg"), ',');
-  while (!iter_done(it2)) {
+  while (!str_iter_done(it2)) {
     str split = str_next_splitc(&it2);
     str_dbg(split);
   }
 
   StrSplitWhen it3 = str_split_when(SV("abc,,bcd,cde,defg"), ispunct);
-  while (!iter_done(it3)) {
+  while (!str_iter_done(it3)) {
     str split = str_next_split_when(&it3);
     str_dbg(split);
   }

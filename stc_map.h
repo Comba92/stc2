@@ -172,12 +172,13 @@ bool name##_remove(name* m, str key) { \
 } \
  \
 void name##_clear(name* m) { \
+  m->len = 0; \
+  if (m->entries == NULL) return; \
   /* keys are owned, free them */ \
   for (int i=0; i<m->cap; ++i) { \
     str key = m->entries[i].key; \
     if (!map_key_is_marker(key)) free(key.data); \
   } \
-  m->len = 0; \
 } \
  \
 void name##_free(name* m) { \
@@ -316,11 +317,13 @@ bool Set_remove(Set* s, str key) {
 
 void Set_clear(Set* s) { \
   /* keys are owned, free them */
+  s->len = 0;
+  if (s->keys == NULL) return;
+
   for (int i=0; i<s->cap; ++i) {
     str key = s->keys[i];
     if (!map_key_is_marker(key)) free(key.data);
   }
-  s->len = 0;
 }
 
 void Set_free(Set* s) {
@@ -330,6 +333,14 @@ void Set_free(Set* s) {
   s->cap = 0;
   s->keys = NULL;
   s->bits = NULL;
+}
+
+bool Set_is_superset(Set* this, Set* other) {
+
+}
+
+bool Set_is_subset(Set* this, Set* other) {
+
 }
 
 // https://doc.rust-lang.org/std/collections/struct.HashSet.html

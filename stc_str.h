@@ -307,7 +307,7 @@ StrList str_words_collect(str s) {
 
 //////////////////////
 
-#define iter_done(it) ((it).src.len == 0)
+#define str_iter_done(it) ((it).src.len == 0)
 
 typedef struct {
   str src;
@@ -624,7 +624,7 @@ String str_replace_all(String* sb, str sv, str from, str to) {
   
   sb->len = 0;
   int last = 0;
-  while (!iter_done(it)) {
+  while (!str_iter_done(it)) {
     int match = str_next_match(&it);
     String_append_str(sb, str_slice(sv, last, match));
     String_append_str(sb, to);

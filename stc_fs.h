@@ -17,13 +17,14 @@
 
   #define PATH_MAX_LEN PATH_MAX
 #else
+  // this trims windows.h with minimal functionality
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
 
   #define PATH_MAX_LEN MAX_PATH
 #endif
 
-// TODO: should if_exists/not_exists function check for existance?
+// TODO: fs_copy, fs_move, fs_delete ?? 
 
 static String fs_tmp_sb = {0};
 
@@ -98,7 +99,7 @@ bool file_close(FILE* f) {
   return res;
 }
 
-// TODO: consider memory mapped file reading
+// TODO: consider memory mapped file reading?
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
 char* file_read_to_string(char* path) {
@@ -172,49 +173,6 @@ bool file_append_bytes(FILE* fd, char* data, size_t len) {
   return true;
 }
 
-bool file_delete(char* src) {
-  int res = remove(src) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-  return res;
-}
-
-// TODO: does this override dst? Investigate
-// a file_move_if_not_exists() may be a good idea
-bool file_move(char* src, char* dst) {
-  int res = rename(src, dst) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-  return res;
-}
-
-
-// #ifdef _WIN32
-// static void perror_windows(const char* msg) {
-//   DWORD err = GetLastError();
-//   static char buf[512];
-
-//   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
-//   DWORD len = FormatMessage(
-//     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-//     NULL,
-//     err,
-//     LANG_SYSTEM_DEFAULT,
-//     buf, 512,
-//     NULL
-//   );
-
-//   if (len == 0) {
-//     fprintf(stderr, "%s: couldn't get error message from Windows for error ID %ld\n", msg, err);
-//   } else {
-//     while (len > 0 && isspace(buf[len-1])) buf[len--] = '\0';
-//     fprintf(stderr, "%s: %s\n", msg, buf);
-//   }
-// }
-// #endif
-
 /////////////////////
 
 // TODO: consider making path a sperate type
@@ -252,7 +210,8 @@ str path_parent(char* path) {
 }
 
 // TODO: Should this return NULL on error?
-// TODO: currently not workin as expected, investigate
+// TODO: consider using dir_current() and concat the relative path
+// TODO: this only works if path is a correct relative path; no check are done to see if absolute path is valid
 char* path_to_absolute(char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
@@ -285,7 +244,7 @@ char* path_to_absolute(char* path) {
 str path_prefix(char* path) {
   if (path[0] == '/') return str_from_cstr_unchecked("/", 1);
   else if (isalpha(path[0]) && path[1] == ':' && path[2] == '\\') {
-    return str_take(str_from_cstr(path), 3);
+    return str_from_cstr_unchecked(path, 3);
   }
   // TODO: windows other weird prefixes aren't supported
 
@@ -360,7 +319,6 @@ typedef enum {
 } FileType;
 
 typedef struct {
-  char* path;
   char* name;
   FileType type;
 } DirEntry;
@@ -373,11 +331,11 @@ typedef struct {
   WIN32_FIND_DATA data;
   HANDLE h;
 #endif
+  bool failed;
+  DirEntry curr;
 } DirRead;
 
-
-// TODO: this iterator still sucks, make it better
-// TODO: BUG, every dir_close return an error
+// TODO: what should happen if this fails? Right now, it can be passed to dir_read(), which will immediately end the iterator
 DirRead dir_open(char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -397,7 +355,8 @@ DirRead dir_open(char* dirpath) {
   }
   #endif
 
-  return (DirRead) { dir_fd, dir };
+  bool had_error = dir_fd == -1 || dir == NULL;
+  DirRead it = { dir_fd, dir, had_error };
 #else
   char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
@@ -412,8 +371,10 @@ DirRead dir_open(char* dirpath) {
   }
   #endif
 
-  return (DirRead) { data, h };
+  bool had_error = h == INVALID_HANDLE_VALUE;
+  DirRead it = { data, h, had_error };
 #endif
+  return it;
 }
 
 bool dir_close(DirRead* it) {
@@ -431,47 +392,50 @@ bool dir_close(DirRead* it) {
   return res;
 }
 
-DirEntry dir_read(DirRead* it) {
-  DirEntry entry = {0};
+DirEntry* dir_read(DirRead* it) {
 #ifndef _WIN32
   int prev_err = errno;
-  
   struct dirent* dp;
   char* filename;
+
+  // readdir until a valid file is returned
+  bool is_special_entry = false;
   do {
     dp = readdir(it->dir);
 
+    // no more files left
     if (dp == NULL) {
       #ifdef STC_LOG_ERR
       if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
       #endif
 
       dir_close(it);
-      return entry;
+      return NULL;
     }
 
     filename = dp->d_name;
-  } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
+    is_special_entry = strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0;
+  } while (is_special_entry);
 
+  // get file data
   struct stat statbuf;
   int fd = openat(it->dir_fd, filename, O_RDONLY);
   if (fstat(fd, &statbuf) != 0) {
     #ifdef STC_LOG_ERR
-      fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
+      fs_err_print(str_fmt_tmp(filename));
     #endif
-    // printf("Bad filename %s\n", filename);
-    // perror("Couldn't read file during directory scan");
 
-    return entry;
+    it->curr.name = "";
+    it->curr.type = FileType_Other;
+    return &it->curr;
   }
 
-  entry.name = dp->d_name;
-  entry.path = path_to_absolute(entry.name);
+  it->curr.name = dp->d_name;
   switch (statbuf.st_mode & S_IFMT) {
-    case S_IFREG: entry.type = FileType_File; break;
-    case S_IFDIR: entry.type = FileType_Dir; break;
-    case S_IFLNK: entry.type = FileType_Link; break;
-    default: entry.type = FileType_Other; break;
+    case S_IFREG: it->curr.type = FileType_File; break;
+    case S_IFDIR: it->curr.type = FileType_Dir; break;
+    case S_IFLNK: it->curr.type = FileType_Link; break;
+    default: it->curr.type = FileType_Other; break;
   }
 
   if (close(fd) != 0) {
@@ -481,170 +445,182 @@ DirEntry dir_read(DirRead* it) {
   };
 #else
   char* filename;
+  bool is_special_entry = false;
+
+  // FindNextFile until a valid file is returned
   do {
     bool res = FindNextFile(it->h, &it->data) != 0;
-    if (!res) {
-      if (GetLastError() == ERROR_NO_MORE_FILES) {
-        dir_close(it);
-      }
 
+    // no more files left
+    if (!res) {
       #ifdef STC_LOG_ERR
-      else {
+      if (GetLastError() != ERROR_NO_MORE_FILES) {
         fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
       }
       #endif
 
-      return entry;
+      dir_close(it);
+      return NULL;
     }
 
     filename = it->data.cFileName;
-  } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
+    is_special_entry = strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0;
+  } while (is_special_entry);
 
-  entry.name = strdup(filename);
-  entry.path = path_to_absolute(entry.name);
+  // get file data
+  it->curr.name = filename;
   switch (it->data.dwFileAttributes) {
-    case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
-    default: entry.type = FileType_File; break;
+    case FILE_ATTRIBUTE_DIRECTORY: it->curr.type = FileType_Dir; break;
+    default: it->curr.type = FileType_File; break;
   }
 #endif
-  return entry;
+  return &it->curr;
 }
 
+#define dir_iter(ent, it) for(DirEntry* ent; (ent = dir_read(it)) != NULL;)
 
 list_def(DirEntry, DirEntries)
 void DirEntries_drop(DirEntries* entries) {
+  if (entries->data == NULL) return;
   listforeach(DirEntry, e, entries) free(e->name);
   free(entries->data);
 }
 
-// TODO: enable entries sorting
-// TODO: rewrite in terms of dir_open() and dir_read()
-DirEntries dir_read_collect(char* dirpath) {
+// TODO: what if any function fails? Consider passing DirEntries as pointer and returning success as bool
+DirEntries dir_entries(char* dirpath) {
   DirEntries entries = {0};
-  DirEntry entry = {0};
+  DirRead it = dir_open(dirpath);
 
-#ifndef _WIN32
-  int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
-  DIR* d = fdopendir(dir_fd);
-
-  if (d == NULL) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(dirpath);
-    #endif
-    return entries;
+  for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
+    DirEntry to_push = { strdup(entry->name), entry->type };
+    DirEntries_push(entries, to_push);
   }
-  
-  struct dirent* dp;
-  struct stat statbuf;
-
-  int prev_err = errno;
-  // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
-  // https://man7.org/linux/man-pages/man3/readdir.3p.html
-  while ((dp = readdir(d)) != NULL) {
-    char* filename = dp->d_name;
-    if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
-
-    int fd = openat(dir_fd, filename, O_RDONLY);
-    if (fstat(fd, &statbuf) != 0) {
-      #ifdef STC_LOG_ERR
-        fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-      #endif
-      continue;
-    }
-
-    entry.name = dp->d_name;
-    entry.path = path_to_absolute(entry.name);
-    switch (statbuf.st_mode & S_IFMT) {
-      case S_IFREG: entry.type = FileType_File; break;
-      case S_IFDIR: entry.type = FileType_Dir; break;
-      case S_IFLNK: entry.type = FileType_Link; break;
-      default: entry.type = FileType_Other; break;
-    }
-
-    DirEntries_push(&entries, entry);
-    if (close(fd) != 0) {
-      #ifdef STC_LOG_ERR
-      fs_err_print(entry.name);
-      #endif
-      continue;
-    };
-  }
-
-    #ifdef STC_LOG_ERR
-    if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-    #endif
-
-  // struct dirent **entries;
-  // int n = scandir(".", &entries, 0, alphasort);
-  // if (n < 0) {
-    // perror("scandir");
-  // } else {
-    // for (int i = 0; i < n; i++) {
-      //   printf("%s\n", entries[i]->d_name);
-      // }
-  // }
-
-  if (closedir(d) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-    #endif
-  };
-#else
-  char buf[PATH_MAX_LEN];
-  snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
-
-  // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
-  WIN32_FIND_DATA data;
-  HANDLE h = FindFirstFile(buf, &data);
-  if (h == INVALID_HANDLE_VALUE) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(dirpath);
-    #endif
-    return entries;
-  }
-
-  do {
-    char* filename = data.cFileName;
-    if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
-
-    entry.name = strdup(filename);
-    entry.path = path_to_absolute(entry.name);
-    switch (data.dwFileAttributes) {
-      case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
-      default: entry.type = FileType_File; break;
-    }
-
-    DirEntries_push(&entries, entry);
-  } while(FindNextFile(h, &data) != 0);
-  
-  if (GetLastError() != ERROR_NO_MORE_FILES) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Dir handle %p", h));
-    #endif
-  }
-
-  if (FindClose(h) == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Dir handle %p", h));
-    #endif
-  }
-#endif
 
   return entries;
 }
 
+// DirEntries dir_read_collect(char* dirpath) {
+//   DirEntries entries = {0};
+//   DirEntry entry = {0};
+
+// #ifndef _WIN32
+//   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
+//   DIR* d = fdopendir(dir_fd);
+
+//   if (d == NULL) {
+//     #ifdef STC_LOG_ERR
+//     fs_err_print(dirpath);
+//     #endif
+//     return entries;
+//   }
+  
+//   struct dirent* dp;
+//   struct stat statbuf;
+
+//   int prev_err = errno;
+//   // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
+//   // https://man7.org/linux/man-pages/man3/readdir.3p.html
+//   while ((dp = readdir(d)) != NULL) {
+//     char* filename = dp->d_name;
+//     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
+
+//     int fd = openat(dir_fd, filename, O_RDONLY);
+//     if (fstat(fd, &statbuf) != 0) {
+//       #ifdef STC_LOG_ERR
+//         fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+//       #endif
+//       continue;
+//     }
+
+//     entry.name = dp->d_name;
+//     switch (statbuf.st_mode & S_IFMT) {
+//       case S_IFREG: entry.type = FileType_File; break;
+//       case S_IFDIR: entry.type = FileType_Dir; break;
+//       case S_IFLNK: entry.type = FileType_Link; break;
+//       default: entry.type = FileType_Other; break;
+//     }
+
+//     DirEntries_push(&entries, entry);
+//     if (close(fd) != 0) {
+//       #ifdef STC_LOG_ERR
+//       fs_err_print(entry.name);
+//       #endif
+//       continue;
+//     };
+//   }
+
+//     #ifdef STC_LOG_ERR
+//     if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+//     #endif
+
+//     if (closedir(d) != 0) {
+//       #ifdef STC_LOG_ERR
+//       fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
+//       #endif
+//     };
+// #else
+//   char buf[PATH_MAX_LEN];
+//   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
+
+//   // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
+//   WIN32_FIND_DATA data;
+//   HANDLE h = FindFirstFile(buf, &data);
+//   if (h == INVALID_HANDLE_VALUE) {
+//     #ifdef STC_LOG_ERR
+//     fs_err_print(dirpath);
+//     #endif
+//     return entries;
+//   }
+
+//   do {
+//     char* filename = data.cFileName;
+//     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
+
+//     entry.name = strdup(filename);
+//     switch (data.dwFileAttributes) {
+//       case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
+//       default: entry.type = FileType_File; break;
+//     }
+
+//     DirEntries_push(&entries, entry);
+//   } while(FindNextFile(h, &data) != 0);
+  
+//   if (GetLastError() != ERROR_NO_MORE_FILES) {
+//     #ifdef STC_LOG_ERR
+//     fs_err_print(str_fmt_tmp("Dir handle %p", h));
+//     #endif
+//   }
+
+//   if (FindClose(h) == 0) {
+//     #ifdef STC_LOG_ERR
+//     fs_err_print(str_fmt_tmp("Dir handle %p", h));
+//     #endif
+//   }
+// #endif
+
+//   return entries;
+// }
+
 /////////////////////
 
-bool file_exists(char* path) {
+bool path_exists(char* path) {
 #ifndef _WIN32
   struct stat buf;
-  return stat(path, &buf) == 0 && S_ISREG(buf.st_mode);
+  return stat(path, &buf) == 0;
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesa?redirectedfrom=MSDN
   return GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES;
 #endif
 }
 
+bool file_exists(char* path) {
+#ifndef _WIN32
+  struct stat buf;
+  return stat(path, &buf) == 0 && S_ISREG(buf.st_mode);
+#else
+  return path_exists(path);
+#endif
+}
 
 bool dir_exists(char* path) {
 #ifndef _WIN32
@@ -689,6 +665,22 @@ FileType file_type(char* path) {
 #endif
 }
 
+size_t file_size(char* path) {
+  FILE* f = file_open_read(path);
+  if (f == NULL) return 0;
+
+#ifndef _WIN32
+  if (fseek(f, 0, SEEK_END) != 0) return 0;
+  long long res = ftell(f);
+#else 
+  if (_fseeki64(f, 0, SEEK_END) != 0) return 0;
+  long long res = _ftelli64(f);
+#endif
+
+  if (res < 0) return 0;
+  else return res;
+}
+
 static char cwd[PATH_MAX_LEN];
 char* dir_current() {
 #ifndef _WIN32
@@ -718,6 +710,45 @@ bool dir_set_current(char* path) {
   if (!res) fs_err_print(str_fmt_tmp("Failed to set working directory"));
   #endif
   return res;
+}
+
+bool file_delete(char* src) {
+  int res = remove(src) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+  return res;
+}
+
+// TODO: does this override dst? Investigate
+// TODO: rename behaviour is implementation-defined, consider using os call
+bool file_move(char* src, char* dst) {
+#ifndef _WIN32
+  int res = rename(src, dst) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+#else
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefile
+  bool res = MoveFileEx(src, dst, MOVEFILE_REPLACE_EXISTING) != 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+  return res;
+}
+
+bool file_move_src_if_dst_not_exists(char* src, char* dst) {
+#ifndef _WIN32
+  if (file_exists(dst)) return false;
+  else return file_move(src, dst);
+#else
+  // rename doesn't overwrite dst on Windows, so one syscall less
+  int res = rename(src, dst) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+  return res;
+#endif
 }
 
 bool dir_create(char* path) {
@@ -774,6 +805,7 @@ bool dir_delete(char* path) {
 #ifndef _WIN32
   bool res = rmdir(path) == 0;
 #else
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-removedirectorya
   bool res = RemoveDirectory(path) != 0;
 #endif
 
@@ -782,33 +814,6 @@ bool dir_delete(char* path) {
   #endif
 
   return res;
-}
-
-
-bool dir_delete_recursive(char* path) {
-  // TODO
-  // if (file_type(path) != FileType_Dir) return false;
-
-  // bool had_error = false;
-  // DirEntries entries = dir_read_collect(path);
-  
-  // fs_tmp_sb.len = 0;
-  // String_append_cstr(&fs_tmp_sb, path);
-  // String sb = {0};
-  // listforeach(DirEntry, entry, &entries) {
-  //   if (entry->type == FileType_File) {
-  //     // had_error |= !file_delete(str_fmt_tmp("%s/%s", path, entry->name));
-  //     printf("Deleting %s...\n", String_fmt(&sb, "%s/%s", path, entry->name).data);
-  //     if (had_error) fs_err_print("what?");
-  //   } else if (entry->type == FileType_Dir) {
-  //     path_push(&fs_tmp_sb, entry->name);
-  //     str_dbg(fs_tmp_sb);
-  //     dir_delete_recursive(fs_tmp_sb.data);
-  //     path_pop(&fs_tmp_sb);
-  //   }
-  // }
-
-  // return !had_error;
 }
 
 // TODO: creations options and permissions?
@@ -932,7 +937,81 @@ bool file_copy(char* src, char* dst) {
 }
 
 bool dir_copy_recursive(char* src, char* dst) {
-  // TODO
+  if (!dir_create_recursive(dst)) {
+    return false;
+  }
+
+  DirRead it = dir_open(src);
+  if (it.failed) return false;
+
+  /*
+    https://man7.org/linux/man-pages/man3/readdir.3.html
+    The data returned by readdir() may be overwritten by subsequent
+    calls to readdir() for the same directory stream.
+
+    This means we don't need to collect the entries!
+  */
+
+  String sb_src = String_from_cstr(src);
+  String sb_dst = String_from_cstr(dst);
+
+  bool had_error = false;
+  for(DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
+    path_push(&sb_src, entry->name);
+    path_push(&sb_dst, entry->name);
+
+    switch (entry->type) {
+      case FileType_File: {
+        had_error |= !file_copy(sb_src.data, sb_dst.data);
+      } break;
+      case FileType_Dir: {
+        had_error |= !dir_create(sb_dst.data);
+        had_error |= !dir_copy_recursive(sb_src.data, sb_dst.data);
+      } break;
+
+      default: break;
+    }
+
+    path_pop(&sb_src);
+    path_pop(&sb_dst);
+  }
+
+  return !had_error;
+}
+
+
+bool dir_delete_recursive(char* path) { 
+  if (path_is_absolute(path)) {
+    fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE DIRECTORY, ABORTING\n");
+    return false;
+  }
+
+  DirRead it = dir_open(path);
+  if (it.failed) return false;
+
+  String sb = String_from_cstr(path);
+
+  bool had_error = false;
+  for(DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
+    path_push(&sb, entry->name);
+
+    switch (entry->type) {
+      case FileType_File: {
+        had_error |= !file_delete(sb.data);
+      } break;
+      case FileType_Dir: {
+        had_error |= !dir_delete_recursive(sb.data);
+        had_error |= !dir_delete(sb.data);
+      } break;
+
+      default: break;
+    }
+
+    path_pop(&sb);
+  }
+
+  had_error |= !dir_delete(path);
+  return !had_error;
 }
 
 #endif
