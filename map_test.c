@@ -73,7 +73,7 @@ int main() {
   }
 
   rangefor(int, i, 0, 150) {
-    bool contained = Set_get(&s, SBV(int_to_str(&sb, i)));
+    bool contained = Set_contains(&s, SBV(int_to_str(&sb, i)));
     printf("%d is contained: %d\n", i, contained);
   }
 

@@ -11,6 +11,7 @@ char* const MAP_ENTRY_EMPTY   = (char*) 0;
 char* const MAP_ENTRY_REMOVED = (char*) 1;
 
 // TODO: map iterator
+// TODO: can search be merged into one?
 
 // https://theartincode.stanis.me/008-djb2/
 long djb2(char *s, size_t len)
@@ -269,7 +270,7 @@ void Set_reserve(Set* s, size_t new_cap) {
   }
 }
 
-bool Set_get(Set* s, str key) {
+bool Set_contains(Set* s, str key) {
   if (s->len == 0) return false;
   int i = Set_search(s, key);
   if (i == -1) return false;
@@ -330,5 +331,8 @@ void Set_free(Set* s) {
   s->keys = NULL;
   s->bits = NULL;
 }
+
+// https://doc.rust-lang.org/std/collections/struct.HashSet.html
+// TODO: union, intersection, symmetric_difference, is_subset, is_superset
 
 #endif

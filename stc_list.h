@@ -32,9 +32,11 @@ void name##_resize(name* l, size_t new_len, type value) { \
     l->len = new_len; \
   } else { \
     name##_reserve(l, l->len + new_len); \
-    for (int i=0; i<new_len; ++i) { \
+    size_t range = (new_len - l->len); \
+    for (int i=0; i<range; ++i) { \
       l->data[l->len + i] = value; \
     } \
+    l->len = new_len;
   } \
 } \
  \

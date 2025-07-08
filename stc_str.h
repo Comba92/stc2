@@ -653,13 +653,5 @@ String str_join(String* sb, str join, StrList strs) {
   return *sb;
 }
 
-// String str_join_two(String* sb, str join, str a, str b) {
-//   sb->len = 0;
-//   String_reserve(sb, a.len + b.len + join.len);
-//   String_append_str(sb, a);
-//   String_append_str(sb, join);
-//   String_append_str(sb, b);
-//   return *sb;
-// }
 
 #endif
