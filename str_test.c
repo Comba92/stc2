@@ -4,7 +4,7 @@
 #define res_dbg(s) printf("%d > " #s "\n", (int) (s));
 
 int main() {
-  printf("Types sizes in bytes:\nchar = %ld\nshort = %ld\nint = %ld\nlong = %ld\nlong int %ld\nlong long %ld\nlong long int %ld\nsize_t %ld\nfloat %ld\ndouble %ld\n",
+  printf("Types sizes in bytes:\nchar = %lld\nshort = %lld\nint = %lld\nlong = %lld\nlong int %lld\nlong long %lld\nlong long int %lld\nsize_t %lld\nfloat %lld\ndouble %lld\n",
     sizeof(char),
     sizeof(short),
     sizeof(int),

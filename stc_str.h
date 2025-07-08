@@ -45,7 +45,7 @@ str str_from_cstr_unchecked(char* s, size_t len) {
 const str STR_EMPTY = {0, ""};
 
 bool str_is_empty(str s) {
-  return s.data == NULL || s.data == "" || s.len == 0;
+  return s.data == NULL || s.data[0] == '\0' || s.len == 0;
 }
 
 str str_slice(str s, size_t start, size_t end) {

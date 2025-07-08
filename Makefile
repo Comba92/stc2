@@ -12,6 +12,9 @@ list: list_test.c
 map: map_test.c
 	gcc map_test.c -o map_test
 
+deque: deque_test.c
+	gcc deque_test.c -o deque_test 
+
 grep: grep.c
 	gcc grep.c -o grep
 

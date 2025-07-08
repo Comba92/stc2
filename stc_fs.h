@@ -17,6 +17,7 @@
 
   #define PATH_MAX_LEN PATH_MAX
 #else
+  #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
 
   #define PATH_MAX_LEN MAX_PATH
@@ -61,10 +62,11 @@ char* fs_err_msg() {
 }
 
 void fs_err_print(char* msg) {
-  if (msg == NULL || msg == "") {
-    fprintf(stderr, "%s\n", fs_err_msg());
+  int err = fs_err_code();
+  if (msg == NULL || msg[0] == '\0') {
+    fprintf(stderr, "[%d] %s\n", err, fs_err_msg());
   } else {
-    fprintf(stderr, "%s: %s\n", msg, fs_err_msg());
+    fprintf(stderr, "%s: [%d] %s\n", msg, err, fs_err_msg());
   }
 }
 
@@ -178,6 +180,8 @@ bool file_delete(char* src) {
   return res;
 }
 
+// TODO: does this override dst? Investigate
+// a file_move_if_not_exists() may be a good idea
 bool file_move(char* src, char* dst) {
   int res = rename(src, dst) == 0;
   #ifdef STC_LOG_ERR
@@ -248,6 +252,7 @@ str path_parent(char* path) {
 }
 
 // TODO: Should this return NULL on error?
+// TODO: currently not workin as expected, investigate
 char* path_to_absolute(char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
@@ -310,7 +315,7 @@ StrList path_components(char* path) {
 
 void path_push(String* sb, char* path) {
   if (path_is_absolute(path)) sb->len = 0;
-  else if (String_last(*sb) != '/') String_push(sb, '/');
+  else if (String_last(*sb) != '/' && path[0] != '/') String_push(sb, '/');
   String_append_cstr(sb, path);
   String_append_null(sb);
 }
@@ -355,7 +360,7 @@ typedef enum {
 } FileType;
 
 typedef struct {
-  char* parent;
+  char* path;
   char* name;
   FileType type;
 } DirEntry;
@@ -368,9 +373,11 @@ typedef struct {
   WIN32_FIND_DATA data;
   HANDLE h;
 #endif
-  DirEntry last_entry;
 } DirRead;
 
+
+// TODO: this iterator still sucks, make it better
+// TODO: BUG, every dir_close return an error
 DirRead dir_open(char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -413,12 +420,12 @@ bool dir_close(DirRead* it) {
 #ifndef _WIN32
   bool res = closedir(it->dir) == 0;
   #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
+  if (!res) fs_err_print(str_fmt_tmp("Closing dir descriptor %d", it->dir_fd));
   #endif
 #else
-  bool res = FindClose(it->h) == 0;
+  bool res = FindClose(it->h) != 0;
   #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
+  if (!res) fs_err_print(str_fmt_tmp("Closing dir handle %p", it->h));
   #endif
 #endif
   return res;
@@ -459,7 +466,7 @@ DirEntry dir_read(DirRead* it) {
   }
 
   entry.name = dp->d_name;
-  entry.parent = path_to_absolute(entry.name);
+  entry.path = path_to_absolute(entry.name);
   switch (statbuf.st_mode & S_IFMT) {
     case S_IFREG: entry.type = FileType_File; break;
     case S_IFDIR: entry.type = FileType_Dir; break;
@@ -477,13 +484,16 @@ DirEntry dir_read(DirRead* it) {
   do {
     bool res = FindNextFile(it->h, &it->data) != 0;
     if (!res) {
+      if (GetLastError() == ERROR_NO_MORE_FILES) {
+        dir_close(it);
+      }
+
       #ifdef STC_LOG_ERR
-      if (GetLastError() != ERROR_NO_MORE_FILES) {
+      else {
         fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
       }
       #endif
 
-      dir_close(it);
       return entry;
     }
 
@@ -491,7 +501,7 @@ DirEntry dir_read(DirRead* it) {
   } while (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0);
 
   entry.name = strdup(filename);
-  entry.parent = path_to_absolute(entry.name);
+  entry.path = path_to_absolute(entry.name);
   switch (it->data.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
     default: entry.type = FileType_File; break;
@@ -543,7 +553,7 @@ DirEntries dir_read_collect(char* dirpath) {
     }
 
     entry.name = dp->d_name;
-    entry.parent = path_to_absolute(entry.name);
+    entry.path = path_to_absolute(entry.name);
     switch (statbuf.st_mode & S_IFMT) {
       case S_IFREG: entry.type = FileType_File; break;
       case S_IFDIR: entry.type = FileType_Dir; break;
@@ -598,7 +608,7 @@ DirEntries dir_read_collect(char* dirpath) {
     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
 
     entry.name = strdup(filename);
-    entry.parent = path_to_absolute(entry.name);
+    entry.path = path_to_absolute(entry.name);
     switch (data.dwFileAttributes) {
       case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
       default: entry.type = FileType_File; break;
@@ -710,7 +720,7 @@ bool dir_set_current(char* path) {
   return res;
 }
 
-bool dir_create_if_not_exists(char* path) {
+bool dir_create(char* path) {
   if (dir_exists(path)) return true;
   
 #ifndef _WIN32
@@ -738,7 +748,7 @@ bool dir_create_recursive(char* path) {
     String_push(&fs_tmp_sb, '/');
     String_append_null(&fs_tmp_sb);
     
-    if (!dir_create_if_not_exists(fs_tmp_sb.data)) {
+    if (!dir_create(fs_tmp_sb.data)) {
       had_error = true;
       break;
     }
@@ -748,33 +758,8 @@ bool dir_create_recursive(char* path) {
   return !had_error;
 }
 
-// TODO
-void dir_walk(char* dirpath) {
-  DirRead it = dir_open(dirpath);
-  DirEntry e = dir_read(&it);
-  
-  String sb = {0};
-  String_append_cstr(&sb, dirpath);
-  str_dbg(sb);
-
-  while (e.name != NULL) {
-    switch (e.type) {
-      case FileType_Dir: {
-        printf("Reading %s\n", e.name);
-        String_append_null(&sb);
-        str_dbg(sb);
-        String_fmt(&sb, "hello %s %s %s", sb.data, e.name, sb.data);
-        str_dbg(sb);
-        printf("%s\n", e.name);
-        // dir_walk(sb.data); 
-      } break;
-      default: printf("File: %s/%s\n", sb.data, e.name); break;
-    }
-
-    e = dir_read(&it);
-  }
-
-  dir_close(&it);
+bool dir_move(char* src, char* dst) {
+  return file_move(src, dst);
 }
 
 // TODO:
@@ -783,14 +768,14 @@ void dir_walk(char* dirpath) {
 // bool nob_rmdir_if_exists_recursive(const char *path);
 // bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 
-bool dir_delete_if_exists(char* path) {
+bool dir_delete(char* path) {
   if (!dir_exists(path)) return true;
   
-  #ifndef _WIN32
-    bool res = rmdir(path) == 0;
-  #else
-    bool res = RemoveDirectory(path) != 0;
-  #endif
+#ifndef _WIN32
+  bool res = rmdir(path) == 0;
+#else
+  bool res = RemoveDirectory(path) != 0;
+#endif
 
   #ifdef STC_LOG_ERR
   if (!res) fs_err_print(path);
@@ -799,30 +784,31 @@ bool dir_delete_if_exists(char* path) {
   return res;
 }
 
-bool dir_delete_contents(char* path) {
-  // TODO
-  // https://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
-}
 
 bool dir_delete_recursive(char* path) {
-  fs_tmp_sb.len = 0;
-  String_append_str(&fs_tmp_sb, str_from_cstr(path));
-  String_append_null(&fs_tmp_sb);
+  // TODO
+  // if (file_type(path) != FileType_Dir) return false;
 
-  bool had_error = false;
-  while (fs_tmp_sb.len > 0) {
-    char* dir = path_last_component(fs_tmp_sb.data);
-    
-    if (!dir_delete_contents(dir)) {
-      had_error = true;
-      break;
-    }
+  // bool had_error = false;
+  // DirEntries entries = dir_read_collect(path);
+  
+  // fs_tmp_sb.len = 0;
+  // String_append_cstr(&fs_tmp_sb, path);
+  // String sb = {0};
+  // listforeach(DirEntry, entry, &entries) {
+  //   if (entry->type == FileType_File) {
+  //     // had_error |= !file_delete(str_fmt_tmp("%s/%s", path, entry->name));
+  //     printf("Deleting %s...\n", String_fmt(&sb, "%s/%s", path, entry->name).data);
+  //     if (had_error) fs_err_print("what?");
+  //   } else if (entry->type == FileType_Dir) {
+  //     path_push(&fs_tmp_sb, entry->name);
+  //     str_dbg(fs_tmp_sb);
+  //     dir_delete_recursive(fs_tmp_sb.data);
+  //     path_pop(&fs_tmp_sb);
+  //   }
+  // }
 
-    path_pop(&fs_tmp_sb);
-    String_append_null(&fs_tmp_sb);
-  }
-
-  return !had_error;
+  // return !had_error;
 }
 
 // TODO: creations options and permissions?

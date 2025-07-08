@@ -11,6 +11,9 @@ typedef struct {
 } Deque;
 
 // https://stackoverflow.com/questions/49072494/how-does-the-vecdeque-ring-buffer-work-internally
+// https://doc.rust-lang.org/std/collections/struct.VecDeque.html
+
+// TODO: deque iterator
 
 void deque_reserve(Deque* d, size_t new_cap) {
   if (new_cap > d->cap) {
@@ -70,7 +73,6 @@ void deque_push_back(Deque* d, int value) {
   d->len += 1;
   deque_reserve(d, d->len+1);
 
-  printf("Pushing %d into tail %d\n", value, d->tail);
   d->data[d->tail] = value;
 
   d->tail = (d->tail + 1) & (d->cap - 1);
@@ -105,9 +107,32 @@ int deque_pop_front(Deque* d) {
   return value;
 }
 
-int deque_get(Deque* d, size_t i) {
+void deque_push_ring(Deque* d, int value) {
+  // TODO
+}
+
+int deque_pop_ring(Deque* d) {
+  // TODO
+}
+
+void deque_assert(Deque* d, size_t i) {
+  assert(
+    i <= d->tail && i >= d->head
+    && "deque access out of bounds"
+  );
+}
+
+int deque_real_idx(Deque* d, size_t i) {
   assert(i < d->len && "deque access out of bounds");
-  return d->data[(d->head + i) & (d->cap - 1)];
+  return (d->head + i) & (d->cap - 1);
+}
+
+int deque_get(Deque* d, size_t i) {
+  return d->data[deque_real_idx(d, i)];
+}
+
+void deque_set(Deque* d, size_t i, int value) {
+  d->data[deque_real_idx(d, i)] = value;
 }
 
 int deque_back(Deque* d) {
@@ -118,6 +143,34 @@ int deque_back(Deque* d) {
 int deque_front(Deque* d) {
   assert(d->len > 0 && "accessed empty queue");
   return d->data[d->head];
+}
+
+void deque_swap(Deque* d, size_t a, size_t b) {
+  // TODO
+}
+
+int deque_remove_swap_front(Deque* d, size_t i) {
+  // TODO
+}
+
+int deque_remove_swap_back(Deque* d, size_t i) {
+  // TODO
+}
+
+void deque_append_front(Deque* d, int* data, size_t len) {
+  // TODO
+}
+
+void deque_append_back(Deque* d, int* data, size_t len) {
+  // TODO
+}
+
+Deque deque_from_array(int* data, size_t len) {
+  // TODO
+}
+
+void deque_resize(Deque* d, size_t new_size) {
+  // TODO
 }
 
 void deque_free(Deque* d) {

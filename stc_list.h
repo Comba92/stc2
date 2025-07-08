@@ -95,51 +95,25 @@ type name##_remove_swap(name* l, size_t i) { \
   l->data[i] = l->data[l->len]; \
   return res; \
 } \
- \
-void name##_append(name* this, name other) { \
-  name##_reserve(this, this->len + other.len); \
-  /* \
-  size_t len = this->len; \
-  for(size_t i=0; i<other.len; ++i) { \
-    this->data[len + i] = other.data[i]; \
-  } \
-  this->len += other.len; \
-  */ \
-  memcpy(this->data + this->len, other.data, other.len * sizeof(type)); \
-  this->len += other.len; \
+\
+void name##_append_array(name* l, type* arr, size_t arr_len) { \
+  name##_reserve(l, l->len + arr_len); \
+  memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
+  l->len += arr_len; \
 } \
  \
 name name##_from_array(type* arr, size_t arr_len) { \
   name res = {0}; \
-  name##_reserve(&res, arr_len); \
-  /* \
-  for(size_t i=0; i<arr_len; ++i) { \
-    res.data[res.len++] = arr[i]; \
-  } \
-  */ \
-  memcpy(res.data, arr, arr_len * sizeof(type)); \
-  res.len += arr_len; \
+  name##_append_array(&res, arr, arr_len); \
   return res; \
+} \
+ \
+void name##_append(name* this, name other) { \
+  name##_append_array(this, other.data, other.len); \
 } \
 \
 name name##_clone(name l) { \
-  name res = {0}; \
-  name##_reserve(&res, l.len); \
-  memcpy(res.data, l.data, l.len * sizeof(type)); \
-  res.len = l.len; \
-  return res; \
-} \
-\
-void name##_append_array(name* l, type* arr, size_t arr_len) { \
-  name##_reserve(l, l->len + arr_len); \
-  /* \
-  size_t len = l->len; \
-  for(size_t i=0; i<arr_len; ++i) { \
-    l->data[len + i] = arr[i]; \
-  } \
-  */ \
-  memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
-  l->len += arr_len; \
+  return name##_from_array(l.data, l.len); \
 } \
  \
 void name##_free(name* l) { \
