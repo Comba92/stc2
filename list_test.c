@@ -77,4 +77,14 @@ int main() {
   listforeach(char*, str, &s) {
     printf("%s\n", *str);
   }
+
+  IntList r = {0};
+  rangefor(int, i, 0, 100) {
+    IntList_push(&r, i);
+  }
+
+  IntList_shuffle(&r);
+  listfor(int, i, &r) {
+    printf("%d\n", r.data[i]);
+  }
 }

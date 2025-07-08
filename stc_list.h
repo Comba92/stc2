@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 #define rangefor(type, it, start, end) for (type it = (start); it < (end); ++it)
 #define listfor(type, it, list) for (type it = 0; it < (list)->len; ++it)
@@ -88,6 +89,14 @@ void name##_swap(name* l, size_t a, size_t b) { \
   l->data[b] = tmp; \
 } \
  \
+void name##_shuffle(name* l) { \
+  /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
+  srand(time(NULL)); \
+  for(int i=l->len-1; i>=0; --i) { \
+    int r = rand() % (i+1); \
+    name##_swap(l, i, r); \
+  } \
+} \
 type name##_remove_swap(name* l, size_t i) { \
   name##_assert(*l, i); \
   l->len--; \
