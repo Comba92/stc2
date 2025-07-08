@@ -315,6 +315,7 @@ typedef enum {
   FileType_Other,
   FileType_File,
   FileType_Dir,
+  // TODO: symlinks are not yet supported anywhere
   FileType_Link,
 } FileType;
 
@@ -335,7 +336,7 @@ typedef struct {
   DirEntry curr;
 } DirRead;
 
-// TODO: what should happen if this fails? Right now, it can be passed to dir_read(), which will immediately end the iterator
+
 DirRead dir_open(char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -362,8 +363,12 @@ DirRead dir_open(char* dirpath) {
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
 
   // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfilea
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfileexa
   WIN32_FIND_DATA data;
-  HANDLE h = FindFirstFile(buf, &data);
+  // HANDLE h = FindFirstFile(buf, &data);
+  // this should be faster than FindFirstFile()
+  HANDLE h = FindFirstFileEx(buf, FindExInfoBasic, &data, FindExSearchNameMatch, NULL, 0);
 
   #ifdef STC_LOG_ERR
   if (h == INVALID_HANDLE_VALUE) {
@@ -493,9 +498,20 @@ DirEntries dir_entries(char* dirpath) {
 
   for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
     DirEntry to_push = { strdup(entry->name), entry->type };
-    DirEntries_push(entries, to_push);
+    DirEntries_push(&entries, to_push);
   }
 
+  return entries;
+}
+
+int dir_entries_cmp(const void* a, const void* b) {
+  char* a_str = ((DirEntry*)a)->name;
+  char* b_str = ((DirEntry*)b)->name;
+  return strcmp(a_str, b_str);
+}
+DirEntries dir_entries_sorted(char* dirpath) {
+  DirEntries entries = dir_entries(dirpath);
+  qsort(entries.data, entries.len, sizeof(DirEntry), dir_entries_cmp);
   return entries;
 }
 
@@ -720,8 +736,7 @@ bool file_delete(char* src) {
   return res;
 }
 
-// TODO: does this override dst? Investigate
-// TODO: rename behaviour is implementation-defined, consider using os call
+
 bool file_move(char* src, char* dst) {
 #ifndef _WIN32
   int res = rename(src, dst) == 0;
@@ -735,20 +750,12 @@ bool file_move(char* src, char* dst) {
   if (!res) fs_err_print(src);
   #endif
   return res;
+#endif
 }
 
 bool file_move_src_if_dst_not_exists(char* src, char* dst) {
-#ifndef _WIN32
   if (file_exists(dst)) return false;
   else return file_move(src, dst);
-#else
-  // rename doesn't overwrite dst on Windows, so one syscall less
-  int res = rename(src, dst) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-  return res;
-#endif
 }
 
 bool dir_create(char* path) {
@@ -793,12 +800,6 @@ bool dir_move(char* src, char* dst) {
   return file_move(src, dst);
 }
 
-// TODO:
-// ?? nob_file_metadata(const char *path, bool follow_links);
-// bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
-// bool nob_rmdir_if_exists_recursive(const char *path);
-// bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
-
 bool dir_delete(char* path) {
   if (!dir_exists(path)) return true;
   
@@ -816,7 +817,6 @@ bool dir_delete(char* path) {
   return res;
 }
 
-// TODO: creations options and permissions?
 bool file_create_if_not_exists(char* path) {
   if (file_exists(path)) return false;
 
@@ -865,8 +865,8 @@ bool file_create_recursive(char* path) {
     && file_create_if_not_exists(path);
 }
 
-// TODO: add flag to choose if should overwrite
-bool file_copy(char* src, char* dst) {
+
+bool file_copy(char* src, char* dst, bool overwrite) {
 #ifndef _WIN32
   int src_fd = open(src, O_RDONLY, 0);
 
@@ -877,13 +877,8 @@ bool file_copy(char* src, char* dst) {
     return false;
   }
 
-  // bool overwrite = false;
-  // int flags = 0;
-  // if (overwrite) {
-  //   flags = O_TRUNCATE:
-  // }
-
-  int dst_fd = open(dst, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+  int flags = overwrite ? O_TRUNCATE : 0;
+  int dst_fd = open(dst, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
 
   if (dst_fd == -1) {
     #ifdef STC_LOG_ERR
@@ -900,6 +895,10 @@ bool file_copy(char* src, char* dst) {
     return false;
   }
   size_t src_size = statbuf.st_size;
+
+  // both copy_file_range abd sendfile are not always avaible on unix
+  // might want to fallback to fread and fwrite
+  // TODO: macos has flconefileat and fcopyfile
 
   // https://man7.org/linux/man-pages/man2/copy_file_range.2.html
   // https://man7.org/linux/man-pages/man2/sendfile.2.html
@@ -928,7 +927,8 @@ bool file_copy(char* src, char* dst) {
   return true;
 #else
   // https://learn.microsoft.com/it-it/windows/win32/api/winbase/nf-winbase-copyfile
-  BOOL res = CopyFile(src, dst, false);
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-copyfileexa
+  BOOL res = CopyFile(src, dst, !overwrite);
   #ifdef STC_LOG_ERR
   if (!res) fs_err_print(dst);
   #endif
@@ -962,7 +962,7 @@ bool dir_copy_recursive(char* src, char* dst) {
 
     switch (entry->type) {
       case FileType_File: {
-        had_error |= !file_copy(sb_src.data, sb_dst.data);
+        had_error |= !file_copy(sb_src.data, sb_dst.data, true);
       } break;
       case FileType_Dir: {
         had_error |= !dir_create(sb_dst.data);

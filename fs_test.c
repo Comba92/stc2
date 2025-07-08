@@ -9,7 +9,7 @@ int main() {
   printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));
 
   DirEntries entries = {0};
-  entries = dir_entries(".");
+  entries = dir_entries_sorted(".");
 
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
@@ -24,7 +24,7 @@ int main() {
   }
   
   dir_entries("/home/comba/");
-  entries = dir_entries("..");
+  entries = dir_entries_sorted("..");
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
     printf("%s %d\n", e->name, e->type);
@@ -49,12 +49,12 @@ int main() {
   printf("test3 dir deleted\n");
 
   printf("Working dir: %s\n", dir_current());
-  printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt"));
+  printf("Copy: %d\n", file_copy("./test.txt", "./test2.txt", false));
   printf("Delete: %d\n", file_delete("./test2.txt"));
   printf("Rename: %d\n", file_move("./test.txt", "./kys.txt"));
   printf("Create: %d\n", file_create_if_not_exists("test3.txt"));
 
-  printf("Copy FAIL: %d\n", file_copy("./test4.txt", "./test2.txt"));
+  printf("Copy FAIL: %d\n", file_copy("./test4.txt", "./test2.txt", false));
   printf("Delete FAIL: %d\n", file_delete("./test4.txt"));
   printf("Rename FAIL: %d\n", file_move("./test4.txt", "./kys.txt"));
   printf("Create FAIL: %d\n", file_create_if_not_exists("kys.txt"));
