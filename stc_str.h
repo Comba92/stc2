@@ -48,8 +48,6 @@ char c_to_upper(char c) {
   return c_is_lower(c) ? c - 'a' + 'A' : c;
 }
 
-
-// TODO: it is time to check for const cstr, static strings size can be found with sizeof!
 // TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   size_t len;
@@ -83,7 +81,7 @@ str str_from_cstr_unchecked(const char* s, size_t len) {
   return (str) { len, s };
 }
 
-const str STR_EMPTY = {0, ""};
+static const str STR_EMPTY = {0, ""};
 
 bool str_is_empty(str s) {
   return s.data == NULL || s.data[0] == '\0' || s.len == 0;
