@@ -25,7 +25,9 @@
 #endif
 
 // TODO: fs_copy, fs_move, fs_delete ?? 
+// TODO: create, copy and move check/versions if exists both for file and dir
 
+// TODO: this is not thread safe retard
 static String fs_tmp_sb = {0};
 
 int fs_err_code() {
@@ -41,6 +43,7 @@ char* fs_err_msg() {
 #ifndef _WIN32
   return strerror(err);
 #else 
+  // TODO: is this thread safe?
   static char buf[512];
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
   DWORD len = FormatMessage(
@@ -683,6 +686,7 @@ size_t file_size(const char* path) {
   else return res;
 }
 
+// TODO: this is not thread safe retard
 static char cwd[PATH_MAX_LEN];
 char* dir_current() {
 #ifndef _WIN32
@@ -737,11 +741,6 @@ bool file_move(const char* src, const char* dst) {
   #endif
   return res;
 #endif
-}
-
-bool file_move_src_if_dst_not_exists(const char* src, const char* dst) {
-  if (file_exists(dst)) return false;
-  else return file_move(src, dst);
 }
 
 bool dir_create(const char* path) {
@@ -803,12 +802,12 @@ bool dir_delete(const char* path) {
   return res;
 }
 
-bool file_create_if_not_exists(const char* path) {
-  if (file_exists(path)) return false;
-
+bool file_create(const char* path, bool overwrite) {
 #ifndef _WIN32
+  int flags = overwrite ? O_TRUNC : 0;
   // https://man7.org/linux/man-pages/man2/open.2.html
-  int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
+  int fd = open(path, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
+  // int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
   if (fd == -1) {
     #ifdef STC_LOG_ERR
     fs_err_print(path);
@@ -823,7 +822,8 @@ bool file_create_if_not_exists(const char* path) {
   }
 #else
   // https://learn.microsoft.com/it-it/windows/win32/api/fileapi/nf-fileapi-createfilea
-  HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+  DWORD flags = overwrite ? CREATE_ALWAYS : CREATE_NEW;
+  HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, flags, FILE_ATTRIBUTE_NORMAL, NULL);
   if (h == INVALID_HANDLE_VALUE) {
     #ifdef STC_LOG_ERR
     fs_err_print(path);
@@ -841,14 +841,14 @@ bool file_create_if_not_exists(const char* path) {
   return true;
 }
 
-bool file_create_recursive(const char* path) {
+bool file_create_recursive(const char* path, bool overwrite) {
   str parent = path_parent(path);
   fs_tmp_sb.len = 0;
   String_append_str(&fs_tmp_sb, parent);
   String_append_null(&fs_tmp_sb);
 
   return dir_create_recursive(fs_tmp_sb.data) 
-    && file_create_if_not_exists(path);
+    && file_create(path, overwrite);
 }
 
 

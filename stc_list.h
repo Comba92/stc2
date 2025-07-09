@@ -12,6 +12,8 @@
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
+// TODO: deal with indexes sizes
+
 #define list_def(type, name) \
 typedef struct { \
   size_t len, cap; \
@@ -63,20 +65,24 @@ type name##_pop(name* l) { \
   return l->data[--l->len]; \
 } \
  \
-typedef bool (*name##CmpFn)(type a, type b); \
+typedef bool (*name##CmpFn)(const type* a, const type* b); \
 int name##_find(name* l, type value, name##CmpFn pred) { \
   for(int i=0; i<l->len; ++i) { \
-    if (pred(l->data[i], value)) return i; \
+    const type* a = (const type*) &l->data[i]; \
+    const type* b = (const type*) &value; \
+    if (pred(a, b)) \
+      return i; \
   } \
  \
   return -1; \
 } \
  \
-typedef bool (*name##FilterFn)(type val); \
+typedef bool (*name##FilterFn)(const type* val); \
 void name##_filter(name* l, name##FilterFn pred) { \
   size_t curr = 0; \
   for(int i=0; i < l->len; ++i) { \
-    if (pred(l->data[i])) { \
+    const type* val = (const type*) &l->data[i]; \
+    if (pred(val)) { \
       l->data[curr++] = l->data[i]; \
     } \
   } \

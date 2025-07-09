@@ -522,6 +522,7 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_str(sb));
 }
 
+// TODO: this is not thread safe retard
 static String tmp_sb = {0};
 
 char* str_fmt_tmp(const char* fmt, ...) {

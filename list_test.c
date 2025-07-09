@@ -13,12 +13,12 @@ struct Dummy dummy_new() {
 list_def(struct Dummy, DummyList)
 list_def(char*, StringList)
 
-bool int_is_even(int val) {
-  return val % 2 == 0;
+bool int_is_even(const int* val) {
+  return *val % 2 == 0;
 }
 
-bool int_cmp(int a, int b) {
-  return a == b;
+bool int_cmp(const int* a, const int* b) {
+  return *a == *b;
 }
 
 int main() {
