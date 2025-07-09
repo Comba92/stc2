@@ -167,8 +167,129 @@ typedef struct {
 ```
 
 ### Macros
+str_fmt
+str_arg(s)
+str_dbg(s)
+SV(cstr)
+SB(cstr)
+SBV(sb)
+STR_EMPTY
+str_iter_done(it)
+str_iter(s, next, it)
+strforeach(c, s)
 
 ### Functions
+bool c_is_space(char c)
+bool c_is_alpha(char c)
+bool c_is_digit(char c)
+bool c_is_alphanum(char c)
+bool c_is_punct(char c)
+bool c_is_lower(char c)
+bool c_is_upper(char c)
+bool c_is_cntrl(char c)
+char c_to_lower(char c)
+char c_to_upper(char c)
+
+char* str_to_cstr(str s)
+str str_clone(str s) {
+str str_from_cstr(const char* s) {
+str str_from_cstr_unchecked(const char* s, size_t len) bool str_is_empty(str s) {
+bool str_is_empty(str s) {
+str str_slice(str s, size_t start, size_t end) {
+str cstr_slice(const char* c, size_t start, size_t end) {
+bool str_eq(str a, str b) {
+bool str_eq_ignorecase(str a, str b) {
+int str_cmp(str a, str b) {
+int str_find(str s, char c) {
+int str_find_rev(str s, char c) {
+bool str_contains(str s, char c) {
+
+int str_match(str s, str target) {
+IntList str_match_all(str s, str target) {
+
+str str_skip(str s, size_t n) {
+str str_skip_rev(str s, size_t n) {
+
+str str_take(str s, size_t n) {
+str str_take_rev(str s, size_t n) {
+
+str str_skip_untilc(str s, char c) {
+str str_skip_rev_untilc(str s, char c) {
+str str_skip_until(str s, str target) {
+str str_skip_while(str s, CharPredicate p) {
+str str_skip_rev_while(str s, CharPredicate p) {
+
+str str_take_untilc(str s, char c) {
+str str_take_rev_untilc(str s, char c) {
+str str_take_until(str s, str target) {
+str str_take_while(str s, CharPredicate p) {
+str str_take_rev_while(str s, CharPredicate p) {
+
+int str_advance_while(str s, CharPredicate p) {
+int str_advance_while_not(str s, CharPredicate p) {
+int str_advance_rev_while(str s, CharPredicate p) {
+
+bool str_starts_with(str s, str start) {
+bool str_ends_with(str s, str end) {
+
+str str_strip_prefix(str s, str prefix) {
+str str_strip_postfix(str s, str postfix) {
+
+str str_trim_start(str s) {
+str str_trim_end(str s) {
+str str_trim(str s) {
+
+StrList str_splitc_collect(str s, char c) {
+StrList str_split_collect(str s, str pattern) {
+StrList str_split_when_collect(str s, CharPredicate pred) {
+StrList str_lines_collect(str s) {
+StrList str_words_collect(str s) {
+
+StrMatches str_matches(str s, str target) {
+int str_next_match(StrMatches* it) {
+
+StrSplitChar str_splitc(str s, char c) {
+str str_next_splitc(StrSplitChar* it) {
+
+StrSplit str_split(str s, str pattern) {
+str str_next_split(StrSplit* it) {
+
+StrSplitWhen str_split_when(str s, CharPredicate pred) {
+str str_next_split_when(StrSplitWhen* it) {
+
+StrLines str_lines(str s) {
+str str_next_line(StrLines* it) {
+
+StrWords str_words(str s) {
+str str_next_word(StrWords* it) {
+
+
+str String_to_str(String sb) {
+void String_append_null(String* sb) {
+void String_append_cstr(String* sb, const char* s) {
+void String_append_str(String* sb, str sv) {
+String String_from_cstr(const char* s) {
+String String_from_str(str s) {
+char* String_to_cstr(String sb) {
+
+char* str_fmt_tmp(const char* fmt, ...) {
+String String_fmt(String* sb, const char* fmt, ...) {
+
+int str_parse_int(str s) {
+double str_parse_float(str s) {
+String int_to_str(String* sb, int n) {
+String float_to_str(String* sb, double n) {
+
+String str_concat(String a, String b) {
+String str_repeat(String* sb, str sv, size_t n) {
+String str_to_upper(String* sb, str sv) {
+String str_to_lower(String* sb, str sv) {
+String String_to_upper(String* s) {
+String str_replace(String* sb, str sv, str from, str to) {
+String str_replace_all(String* sb, str sv, str from, str to) {
+String str_join(String* sb, str join, StrList strs) {
+
+
 
 ## Map
 Generic [hash table](https://en.wikipedia.org/wiki/Hash_table) with string keys. 
@@ -198,7 +319,9 @@ typedef struct {
   MapEntry* curr;
   size_t skipped;
 } MapIter;
+```
 
+```c
 typedef struct {
   size_t len;
   size_t cap;
