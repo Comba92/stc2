@@ -6,14 +6,54 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <ctype.h>
 #include <assert.h>
 
-// TODO: it is time to check for const cstr, static strings size can be found with sizeof! 
+bool c_is_space(char c) {
+  switch (c) {
+    case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': return true;
+    default: return false;
+  }
+}
+bool c_is_alpha(char c) {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+bool c_is_digit(char c) {
+  return c >= '0' && c <= '9';
+}
+bool c_is_alphanum(char c) {
+  return c_is_alpha(c) || c_is_digit(c);
+}
+bool c_is_punct(char c) {
+  // const char puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+
+  return (c >= '!' && c <= '/') 
+  || (c >= ':' && c <= '@') 
+  || (c >= '[' && c <= '`')
+  || (c >= '{' && c <= '~');
+}
+bool c_is_lower(char c) {
+  return c >= 'a' && c <= 'z';
+}
+bool c_is_upper(char c) {
+  return c >= 'A' && c <= 'Z';
+}
+bool c_is_cntrl(char c) {
+  return (c >= 0 || c <= 31) || c == 127;
+}
+
+char c_to_lower(char c) {
+  return c_is_upper(c) ? c - 'A' + 'a' : c;
+}
+char c_to_upper(char c) {
+  return c_is_lower(c) ? c - 'a' + 'A' : c;
+}
+
+
+// TODO: it is time to check for const cstr, static strings size can be found with sizeof!
 // TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   size_t len;
-  char* data;
+  const char* data;
 } str;
 
 #define str_fmt "%.*s"
@@ -33,13 +73,13 @@ str str_clone(str s) {
   return (str) { s.len, cloned };
 }
 
-str str_from_cstr(char* s) {
+str str_from_cstr(const char* s) {
   return (str) { strlen(s), s };
 }
 
 #define SV(cstr) str_from_cstr((cstr))
 
-str str_from_cstr_unchecked(char* s, size_t len) {
+str str_from_cstr_unchecked(const char* s, size_t len) {
   return (str) { len, s };
 }
 
@@ -64,7 +104,7 @@ str str_slice(str s, size_t start, size_t end) {
   };
 }
 
-str cstr_slice(char* c, size_t start, size_t end) {
+str cstr_slice(const char* c, size_t start, size_t end) {
   return str_slice(str_from_cstr(c), start, end);
 }
 
@@ -77,7 +117,7 @@ bool str_eq_ignorecase(str a, str b) {
   if (a.len != b.len) return false;
 
   listfor(int, i, &a) {
-    if (tolower(a.data[i]) != tolower(b.data[i])) return false;
+    if (c_to_lower(a.data[i]) != c_to_lower(b.data[i])) return false;
   }
 
   return true;
@@ -182,7 +222,7 @@ str str_take_until(str s, str target) {
   return str_take(s, idx);
 }
 
-typedef int (*CharPredicate)(int val);
+typedef bool (*CharPredicate)(char val);
 
 int str_advance_while(str s, CharPredicate p) {
   listfor(int, i, &s) {
@@ -241,11 +281,12 @@ str str_strip_postfix(str s, str postfix) {
   else return s;
 }
 
+
 str str_trim_start(str s) {
-  return str_skip_while(s, isspace);
+  return str_skip_while(s, c_is_space);
 }
 str str_trim_end(str s) {
-  return str_skip_rev_while(s, isspace);
+  return str_skip_rev_while(s, c_is_space);
 }
 str str_trim(str s) {
   return str_trim_end(str_trim_start(s));
@@ -303,17 +344,21 @@ StrList str_lines_collect(str s) {
 }
 
 StrList str_words_collect(str s) {
-  return str_split_when_collect(s, isspace);
+  return str_split_when_collect(s, c_is_space);
 }
 
 //////////////////////
 
 #define str_iter_done(it) ((it).src.len == 0)
+#define str_iter(s, next, it) for(str s; (it)->src.len > 0; s = next((it)))
+
+// End condition for all str iterators: src.len == 0
 
 typedef struct {
   str src;
-  str target;
+  const str target;
   size_t skipped;
+  // TODO: consider using pointer to int instead
   int last_match;
 } StrMatches;
 
@@ -347,7 +392,7 @@ int str_next_match(StrMatches* it) {
 
 typedef struct {
   str src;
-  char c;
+  const char c;
 } StrSplitChar;
 
 StrSplitChar str_splitc(str s, char c) {
@@ -369,7 +414,7 @@ str str_next_splitc(StrSplitChar* it) {
 
 typedef struct {
   str src;
-  str pattern;
+  const str pattern;
 } StrSplit;
 
 StrSplit str_split(str s, str pattern) {
@@ -391,7 +436,7 @@ str str_next_split(StrSplit* it) {
 
 typedef struct {
   str src;
-  CharPredicate pred;
+  const CharPredicate pred;
 } StrSplitWhen;
 
 StrSplitWhen str_split_when(str s, CharPredicate pred) {
@@ -417,7 +462,7 @@ str str_next_line(StrLines* it) {
 
 typedef StrSplitWhen StrWords;
 StrWords str_words(str s) {
-  return str_split_when(s, isspace);
+  return str_split_when(s, c_is_space);
 }
 str str_next_word(StrWords* it) {
   return str_next_split_when(it);
@@ -453,7 +498,7 @@ void String_append_null(String* sb) {
   sb->data[sb->len] = '\0';
 }
 
-void String_append_cstr(String* sb, char* s) {
+void String_append_cstr(String* sb, const char* s) {
   String_append_array(sb, s, strlen(s));
   String_append_null(sb);
 }
@@ -462,7 +507,7 @@ void String_append_str(String* sb, str sv) {
   String_append_array(sb, sv.data, sv.len);
 }
 
-String String_from_cstr(char* s) {
+String String_from_cstr(const char* s) {
   String sb = {0};
   String_append_cstr(&sb, s);
   return sb;
@@ -481,7 +526,7 @@ char* String_to_cstr(String sb) {
 
 static String tmp_sb = {0};
 
-char* str_fmt_tmp(char* fmt, ...) {
+char* str_fmt_tmp(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   int real_size = vsnprintf(NULL, 0, fmt, args);
@@ -499,7 +544,8 @@ char* str_fmt_tmp(char* fmt, ...) {
   return tmp_sb.data;
 }
 
-String String_fmt(String* sb, char* fmt, ...) {
+// returns itself
+String String_fmt(String* sb, const char* fmt, ...) {
   // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
   // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
 
@@ -542,10 +588,13 @@ double str_parse_float(str s) {
   return n;
 }
 
+// returns itself
 String int_to_str(String* sb, int n) {
   return String_fmt(sb, "%d", n);
 }
 
+
+// returns itself
 String float_to_str(String* sb, double n) {
   return String_fmt(sb, "%f", n);
 }
@@ -561,6 +610,7 @@ String str_concat(String a, String b) {
   return sb;
 }
 
+// returns itself
 String str_repeat(String* sb, str sv, size_t n) {
   sb->len = 0;
   String_reserve(sb, sv.len * n);
@@ -569,30 +619,39 @@ String str_repeat(String* sb, str sv, size_t n) {
   return *sb;
 }
 
+#define strforeach(c, s) for(const char* c = (s)->data; c < (s)->data + (s)->len; ++c)
+
+// returns itself
 String str_to_upper(String* sb, str sv) {
   sb->len = 0;
-  listforeach(char, c, &sv) {
-    String_push(sb, toupper(*c));
+  strforeach(c, &sv) {
+    String_push(sb, c_to_upper(*c));
   }
   return *sb;
 }
 
+// returns itself
 String str_to_lower(String* sb, str sv) {
   sb->len = 0;
-  listforeach(char, c, &sv) {
-    String_push(sb, tolower(*c));
+  strforeach(c, &sv) {
+    String_push(sb, c_to_lower(*c));
   }
   return *sb;
 }
 
-void String_to_upper(String* s) {
-  listforeach(char, c, s) *c = toupper(*c);
+// returns itself
+String String_to_upper(String* s) {
+  listforeach(char, c, s) *c = c_to_upper(*c);
+  return *s;
 }
 
-void String_to_lower(String* s) {
-  listforeach(char, c, s) *c = tolower(*c);
+// returns itself
+String String_to_lower(String* s) {
+  listforeach(char, c, s) *c = c_to_lower(*c);
+  return *s;
 }
 
+// returns itself
 String str_replace(String* sb, str sv, str from, str to) {
   int match = str_match(sv, from);
   if (match == -1) return String_from_str(sv);
@@ -620,6 +679,7 @@ String str_replace(String* sb, str sv, str from, str to) {
 //   return *sb;
 // }
 
+// returns itself
 String str_replace_all(String* sb, str sv, str from, str to) {
   StrMatches it = str_matches(sv, from);
   
@@ -636,6 +696,7 @@ String str_replace_all(String* sb, str sv, str from, str to) {
   return *sb;
 }
 
+// returns itself
 String str_join(String* sb, str join, StrList strs) {
   sb->len = 0;
   if (strs.len == 0) { return *sb; }
@@ -649,10 +710,9 @@ String str_join(String* sb, str join, StrList strs) {
     String_append_str(sb, strs.data[i]);
     String_append_str(sb, join);
   }
-  String_append_str(sb, StrList_last(strs));
+  String_append_str(sb, *StrList_last(strs));
 
   return *sb;
 }
-
 
 #endif

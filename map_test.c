@@ -4,7 +4,7 @@
 #include "stc_list.h"
 #include "stc_fs.h"
 
-map_def(int, IntMap, IntMapEntry)
+map_def(int, IntMap)
 
 int main() {
   IntMap m = {0};
@@ -54,6 +54,12 @@ int main() {
     IntMapEntry e = m.entries[i];
     if (!map_key_is_removed(e.key)) printf("\"" str_fmt"\" = %d\n", str_arg(e.key), e.val);
     else printf("Bucket %d removed\n", i);
+  }
+
+  printf("Map iterator:\n");
+  IntMapIter it = IntMap_iter(&m);
+  map_iter(IntMap, e, &it) {
+    printf(str_fmt" = %d\n", str_arg(e->key), e->val);
   }
 
   // printf("Buckets: %lld, Collisions count: %lld - Biggest collision: %lld\n", m.len, m.collisions, m.biggest_collision_chain);

@@ -3,7 +3,17 @@
 
 #define res_dbg(s) printf("%d > " #s "\n", (int) (s));
 
+static const char const_cstr[] = "Hello Worldie!";
+static char static_cstr[] = "Hello Worldie!";
+
+
 int main() {
+  char buf[256] = "Hello Worldie!";
+  char* cstr = "Hello Worldie!";
+  const char puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+  printf("Sizeof puntcs: %d\n", sizeof(puntcs));
+  printf("Static const cstr: %d\tStatic cstr: %d\tStatic array: %d\tCstr: %d\n", sizeof(const_cstr), sizeof(static_cstr), sizeof(buf), sizeof(cstr));
+
   printf("Types sizes in bytes:\nchar = %lld\nshort = %lld\nint = %lld\nlong = %lld\nlong int %lld\nlong long %lld\nlong long int %lld\nsize_t %lld\nfloat %lld\ndouble %lld\n",
     sizeof(char),
     sizeof(short),
@@ -36,8 +46,8 @@ int main() {
 
   res_dbg(str_find(s, 'W'));
   res_dbg(str_contains(s, 'W'));
-  res_dbg(str_advance_while(s, isupper));
-  res_dbg(str_advance_rev_while(s, isupper));
+  res_dbg(str_advance_while(s, c_is_upper));
+  res_dbg(str_advance_rev_while(s, c_is_upper));
   
   printf("\n");
 
@@ -58,10 +68,10 @@ int main() {
   str_dbg(str_skip_rev(s, s.len-1));
   str_dbg(str_skip_rev(s, s.len));
 
-  str_dbg(str_skip_while(s, isalpha));
-  str_dbg(str_skip_rev_while(s, isalpha));
-  str_dbg(str_skip_while(s, isdigit));
-  str_dbg(str_skip_rev_while(s, isdigit));
+  str_dbg(str_skip_while(s, c_is_alpha));
+  str_dbg(str_skip_rev_while(s, c_is_alpha));
+  str_dbg(str_skip_while(s, c_is_digit));
+  str_dbg(str_skip_rev_while(s, c_is_digit));
 
   str_dbg(str_skip_untilc(s, 'r'));
   str_dbg(str_skip_until(s, str_from_cstr("World")));
@@ -76,10 +86,10 @@ int main() {
   str_dbg(str_take_rev(s, s.len-1));
   str_dbg(str_take_rev(s, s.len));
 
-  str_dbg(str_take_while(s, isalpha));
-  str_dbg(str_take_rev_while(s, isalpha));
-  str_dbg(str_take_while(s, isdigit));
-  str_dbg(str_take_rev_while(s, isdigit));
+  str_dbg(str_take_while(s, c_is_alpha));
+  str_dbg(str_take_rev_while(s, c_is_alpha));
+  str_dbg(str_take_while(s, c_is_digit));
+  str_dbg(str_take_rev_while(s, c_is_digit));
 
   str_dbg(str_take_untilc(s, 'W'));
   str_dbg(str_take_until(s, str_from_cstr("World")));
@@ -172,7 +182,7 @@ int main() {
     str_dbg(split);
   }
 
-  StrSplitWhen it3 = str_split_when(SV("abc,,bcd,cde,defg"), ispunct);
+  StrSplitWhen it3 = str_split_when(SV("abc,,bcd,cde,defg"), c_is_punct);
   while (!str_iter_done(it3)) {
     str split = str_next_split_when(&it3);
     str_dbg(split);

@@ -2,7 +2,6 @@
 #include <string.h>
 #include <assert.h>
 
-
 typedef struct {
   size_t cap, len;
   size_t front, back;

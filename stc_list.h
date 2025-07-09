@@ -49,13 +49,13 @@ void name##_assert(name l, size_t i) { \
   assert(i < l.len && "list access out of bounds"); \
 } \
  \
-type name##_first(name l) { \
+type* name##_first(name l) { \
   name##_assert(l, 0); \
-  return l.data[0]; \
+  return &l.data[0]; \
 } \
-type name##_last(name l) { \
+type* name##_last(name l) { \
   name##_assert(l, 0); \
-  return l.data[l.len-1]; \
+  return &l.data[l.len-1]; \
 } \
  \
 type name##_pop(name* l) { \
@@ -107,24 +107,24 @@ type name##_remove_swap(name* l, size_t i) { \
   return res; \
 } \
 \
-void name##_append_array(name* l, type* arr, size_t arr_len) { \
+void name##_append_array(name* l, const type* arr, size_t arr_len) { \
   name##_reserve(l, l->len + arr_len); \
   memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
   l->len += arr_len; \
 } \
  \
-name name##_from_array(type* arr, size_t arr_len) { \
+name name##_from_array(const type* arr, size_t arr_len) { \
   name res = {0}; \
   name##_append_array(&res, arr, arr_len); \
   return res; \
 } \
  \
 void name##_append(name* this, name other) { \
-  name##_append_array(this, other.data, other.len); \
+  name##_append_array(this, (const type*) other.data, other.len); \
 } \
 \
 name name##_clone(name l) { \
-  return name##_from_array(l.data, l.len); \
+  return name##_from_array((const type*) l.data, l.len); \
 } \
  \
 void name##_free(name* l) { \

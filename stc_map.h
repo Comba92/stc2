@@ -7,20 +7,15 @@
 #include <assert.h>
 #include "stc_str.h"
 
-char* const MAP_ENTRY_EMPTY   = (char*) 0;
-char* const MAP_ENTRY_REMOVED = (char*) 1;
-
-// TODO: map iterator
 // TODO: can search be merged into one?
-// TODO: replace operation map_replace(m, old_key, new_key, value) ?
 
 // https://theartincode.stanis.me/008-djb2/
-long djb2(char *s, size_t len)
+long djb2(const char *s, size_t len)
 {
   const unsigned long MAGIC = 5381;
 
   long hash = MAGIC;
-  for (char* c = s; len > 0; c++, len--) {
+  for (const char* c = s; len > 0; c++, len--) {
     hash = ((hash << 5) + hash) + (unsigned long) *c;
     /* hash = hash * 33 + c */
   }
@@ -42,6 +37,20 @@ size_t map_next_hash(size_t h, size_t i, size_t cap) {
   size_t hash = (h + i*i); // quadratic probing
   return hash & (cap - 1);
 }
+
+/*
+  Little trick; even though str is just a slice (thus doesn't own its memory),
+  we can still break the rules. Only inside the map, str OWNS its memory.
+  This breaks the const char* qualifier only when we need to free its memory
+  (as free() doesn't expect const char* but only char*).
+  Plus, supposing the user is not accessing the map entries directly, we can use the
+  str pointer as a 'marker' for empty and deleted entries, 
+  by assigning it low integers as it's pointer.
+  This is hacky, but saves us the need for a marker field!
+*/
+
+char* const MAP_ENTRY_EMPTY   = (char*) 0;
+char* const MAP_ENTRY_REMOVED = (char*) 1;
 
 bool map_key_is_empty(str key) {
   return key.data == MAP_ENTRY_EMPTY;
@@ -65,7 +74,7 @@ typedef struct { \
  \
 } name; \
  \
-name##Entry* name##_search(name* m, str key) { \
+name##Entry* name##_search(const name* m, str key) { \
   size_t i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
  \
@@ -80,7 +89,7 @@ name##Entry* name##_search(name* m, str key) { \
   return NULL; \
 } \
  \
-name##Entry* name##_search_for_insert(name* m, str key) { \
+name##Entry* name##_search_for_insert(const name* m, str key) { \
   /* invariant: this can't fail to find an entry, as we always increase cap first */ \
   size_t i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
@@ -129,7 +138,7 @@ void name##_reserve(name* m, size_t new_cap) { \
   } \
 } \
  \
-int* name##_get(name* m, str key) { \
+int* name##_get(const name* m, str key) { \
   if (m->len == 0) return NULL; \
    \
   name##Entry* e = name##_search(m, key); \
@@ -137,7 +146,7 @@ int* name##_get(name* m, str key) { \
   return &e->val; \
 } \
  \
-bool name##_contains(name* m, str key) { \
+bool name##_contains(const name* m, str key) { \
   return name##_get(m, key) != NULL; \
 } \
  \
@@ -164,7 +173,7 @@ bool name##_remove(name* m, str key) { \
   if (e == NULL) { \
     return false; \
   } else { \
-    free(e->key.data); \
+    free((char*) e->key.data); \
     e->key.data = MAP_ENTRY_REMOVED; \
     e->key.len = 0; \
     m->len -= 1; \
@@ -178,7 +187,7 @@ void name##_clear(name* m) { \
   /* keys are owned, free them */ \
   for (int i=0; i<m->cap; ++i) { \
     str key = m->entries[i].key; \
-    if (!map_key_is_marker(key)) free(key.data); \
+    if (!map_key_is_marker(key)) free((char*) key.data); \
   } \
 } \
  \
@@ -188,20 +197,38 @@ void name##_free(name* m) { \
   m->cap = 0; \
   m->entries = NULL; \
 } \
-typedef struct {
-  name* src;
-  size_t curr;
-  size_t skipped;
-} name##Iter;
+typedef struct { \
+  const name* src; \
+  name##Entry* curr; \
+  size_t skipped; \
+} name##Iter; \
+ \
+name##Iter name##_iter(const name* m) { \
+  name##Iter it = { m, NULL, 0 }; \
+ \
+  if (m->cap == 0) return it; \
+  int i; \
+  for(i=0; i<m->cap && map_key_is_marker(m->entries[i].key); ++i); \
+  it.skipped = i+1; \
+  it.curr = i < m->cap ? &m->entries[i] : NULL; \
+ \
+  return it; \
+}  \
+ \
+name##Entry* name##_next(name##Iter* it) { \
+  if (it->curr == NULL) return NULL; \
+ \
+  int i; \
+  for(i=it->skipped; i<it->src->cap && map_key_is_marker(it->src->entries[i].key); ++i); \
+  it->skipped = i+1; \
+  name##Entry* e = it->curr; \
+  it->curr = i < it->src->cap ? &it->src->entries[i] : NULL; \
+   \
+  return e; \
+} \
 
-name##Iter name##_iter(name* m) {
-  name##Iter it = { m, 0, 0 };
-  // TODO: fetch first value
-} 
-
-type* name##_next(name##Iter* it) {
-  // TODO: fetch next value
-}
+#define map_iter(type, ent, it) for(type##Entry* ent; (ent = type##_next(it)) != NULL;)
+#define set_iter(ent, it) for(str* ent; (ent = Set_next(it)) != NULL)
 
 typedef struct {
   size_t cap, len;
@@ -209,18 +236,18 @@ typedef struct {
   char* bits;
 } Set;
 
-typedef struct {
+struct SetBitIdx {
   size_t byte_idx;
   char bit_idx;
-} SetIndex;
+};
 
-SetIndex Set_real_idx(size_t i) {
+struct SetBitIdx Set_bit_idx(size_t i) {
   size_t byte_idx = i / 8;
   size_t bit_idx = i % 8;
-  return (SetIndex) { byte_idx, bit_idx };
+  return (struct SetBitIdx) { byte_idx, bit_idx };
 }
 
-int Set_search(Set* s, str key) {
+int Set_search(const Set* s, str key) {
   size_t i = map_hash_key(key, s->cap);
   str fkey = s->keys[i];
 
@@ -236,7 +263,7 @@ int Set_search(Set* s, str key) {
   return -1;
 }
 
-int Set_search_for_insert(Set* s, str key) {
+int Set_search_for_insert(const Set* s, str key) {
   size_t i = map_hash_key(key, s->cap);
   str fkey = s->keys[i];
 
@@ -286,12 +313,12 @@ void Set_reserve(Set* s, size_t new_cap) {
   }
 }
 
-bool Set_contains(Set* s, str key) {
+bool Set_contains(const Set* s, str key) {
   if (s->len == 0) return false;
   int i = Set_search(s, key);
   if (i == -1) return false;
 
-  SetIndex idx = Set_real_idx(i);
+  struct SetBitIdx idx = Set_bit_idx(i);
 
   char* byte = &s->bits[idx.byte_idx];
   return (((*byte) >> idx.bit_idx) & 1) != 0;
@@ -304,10 +331,9 @@ bool Set_insert(Set* s, str key) {
   // already inserted
   if (i == -1) return false;
 
-  SetIndex idx = Set_real_idx(i);
-
   s->keys[i] = str_clone(key);
   s->len += 1;
+  struct SetBitIdx idx = Set_bit_idx(i);
   char* byte = &s->bits[idx.byte_idx];
   *byte |= (1 << idx.bit_idx);
 
@@ -319,14 +345,16 @@ bool Set_remove(Set* s, str key) {
   int i = Set_search(s, key);
   if (i == -1) return false;
 
-  SetIndex idx = Set_real_idx(i);
   str* fkey = &s->keys[i];
-  free(fkey->data);
+  free((char*) fkey->data);
   fkey->data = MAP_ENTRY_REMOVED;
   fkey->len = 0;
+  s->len -= 1;
+
+  struct SetBitIdx idx = Set_bit_idx(i);
   char* byte = &s->bits[idx.byte_idx];
   *byte &= ~(1 << idx.bit_idx);
-  s->len -= 1;
+
   return true;
 }
 
@@ -337,7 +365,7 @@ void Set_clear(Set* s) { \
 
   for (int i=0; i<s->cap; ++i) {
     str key = s->keys[i];
-    if (!map_key_is_marker(key)) free(key.data);
+    if (!map_key_is_marker(key)) free((char*) key.data);
   }
 }
 
@@ -350,20 +378,77 @@ void Set_free(Set* s) {
   s->bits = NULL;
 }
 
-bool Set_is_superset(Set* this, Set* other) {
+typedef struct {
+  const Set* src;
+  str* curr;
+  size_t skipped;
+} SetIter;
 
+SetIter Set_iter(const Set* s) {
+  SetIter it = { s, 0, 0 };
+  int i;
+  for(i=0; i<s->cap && map_key_is_marker(s->keys[i]); ++i);
+  it.skipped = i+1;
+  it.curr = i < s->cap ? &s->keys[i] : NULL;
+
+  return it;
 }
 
-bool Set_is_subset(Set* this, Set* other) {
-  
+str* Set_next(SetIter* it) {
+  if (it->curr == NULL) return NULL;
+
+  int i;
+  for(i=it->skipped; i<it->src->cap && map_key_is_marker(it->src->keys[i]); ++i);
+  it->skipped = i+1;
+  str* e = it->curr;
+  it->curr = i < it->src->cap ? &it->src->keys[i] : NULL;
+  return e;
 }
 
-bool Set_is_disjoint(Set* this, Set* other) {
+bool Set_is_superset(const Set* this, const Set* other) {
+  if (this->len < other->len) return false;
+
+  SetIter other_it  = Set_iter(other);
+
+  // this should have at least ALL elements of other
+  for(str* other_e; (other_e = Set_next(&other_it)) != NULL;) {
+    // if this doesn't contain an element of other, this it is not a superset
+    if (!Set_contains(this, *other_e)) return false;
+  }
+
+  return true;
+}
+
+bool Set_is_subset(const Set* this, const Set* other) {
+  if (this->len > other->len) return false;
+
+  SetIter this_it  = Set_iter(this);
+
+  // ALL this elements should ALWAYS be in other
+  for(str* this_e; (this_e = Set_next(&this_it)) != NULL;) {
+    // if other doesn't contain an element of this, this it is not a subset
+    if (!Set_contains(other, *this_e)) return false;
+  }
+
+  return true;
+}
+
+bool Set_is_disjoint(const Set* this, const Set* other) {
   // Returns true if this has no elements in common with other
   // same as checking for empty intersection
+
+  SetIter this_it  = Set_iter(this);
+
+  // all elements should be different
+  for(str* this_e; (this_e = Set_next(&this_it)) != NULL;) {
+    // if an element of this is contained in other, they are not disjoint
+    if (Set_contains(other, *this_e)) return false;
+  }
+
+  return true;
 }
 
 // https://doc.rust-lang.org/std/collections/struct.HashSet.html
-// TODO: union, intersection, difference, symmetric_difference
+// TODO: union, intersection, difference, symmetric_difference iterators
 
 #endif

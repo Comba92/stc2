@@ -62,7 +62,7 @@ char* fs_err_msg() {
 #endif
 }
 
-void fs_err_print(char* msg) {
+void fs_err_print(const char* msg) {
   int err = fs_err_code();
   if (msg == NULL || msg[0] == '\0') {
     fprintf(stderr, "[%d] %s\n", err, fs_err_msg());
@@ -71,7 +71,7 @@ void fs_err_print(char* msg) {
   }
 }
 
-static FILE* file_open(char* path, const char* opts) {
+static FILE* file_open(const char* path, const char* opts) {
   FILE* f = fopen(path, opts);
   #ifdef STC_LOG_ERR
   if (f == NULL) fs_err_print(path);
@@ -79,12 +79,12 @@ static FILE* file_open(char* path, const char* opts) {
   return f;
 }
 
-FILE* file_open_read(char* path) {
+FILE* file_open_read(const char* path) {
   // opening files without binary mode is utterly retarded
   return file_open(path, "rb");
 }
 
-FILE* file_open_write(char* path) {
+FILE* file_open_write(const char* path) {
   return file_open(path, "wb");
 }
 
@@ -99,7 +99,7 @@ bool file_close(FILE* f) {
 // TODO: consider memory mapped file reading?
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
-char* file_read_to_string(char* path) {
+char* file_read_to_string(const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) {
     return NULL;
@@ -143,7 +143,7 @@ char* file_read_to_string(char* path) {
   return buf;
 }
 
-bool file_write_bytes(char* path, char* data, size_t len) {
+bool file_write_bytes(const char* path, const char* data, size_t len) {
   FILE* fd = file_open_write(path);
   size_t wrote = fwrite(data, 1, len, fd);
   bool res = wrote != len;
@@ -162,31 +162,31 @@ bool file_write_bytes(char* path, char* data, size_t len) {
 // TODO: consider making path a sperate type
 // https://doc.rust-lang.org/std/path/struct.Path.html
 
-char* path_last_component(char* path) {
+char* path_last_component(const char* path) {
   char* unix_path = strrchr(path, '/');
   char* wind_path = strrchr(path, '\\');
   char* res = unix_path > wind_path ? unix_path : wind_path;
   return res;
 }
 
-char* path_filename(char* path) {
+char* path_filename(const char* path) {
   char* res = path_last_component(path);
-  if (res == NULL) return path;
+  if (res == NULL) return (char*) path;
   return res + 1;
 }
 
-char* path_extension(char* path) {
+char* path_extension(const char* path) {
   char* res = strrchr(path, '.');
   if (res == NULL) return "";
   return res + 1;
 }
 
-str path_filename_no_ext(char* path) {
+str path_filename_no_ext(const char* path) {
   str s = str_from_cstr(path_filename(path));
   return str_skip_rev_untilc(s, '.');
 }
 
-str path_parent(char* path) {
+str path_parent(const char* path) {
   char* parent_start = path_last_component(path);
   // there are no parents
   if (parent_start == NULL || parent_start == path) return STR_EMPTY;
@@ -196,7 +196,7 @@ str path_parent(char* path) {
 // TODO: Should this return NULL on error?
 // TODO: consider using dir_current() and concat the relative path
 // TODO: this only works if path is a correct relative path; no check are done to see if absolute path is valid
-char* path_to_absolute(char* path) {
+char* path_to_absolute(const char* path) {
 #ifndef _WIN32
   // https://man7.org/linux/man-pages/man3/realpath.3.html
   char* res = realpath(path, NULL);
@@ -225,7 +225,7 @@ char* path_to_absolute(char* path) {
 #endif
 }
 
-str path_prefix(char* path) {
+str path_prefix(const char* path) {
   if (path[0] == '/') return str_from_cstr_unchecked("/", 1);
   else if (isalpha(path[0]) && path[1] == ':' && path[2] == '\\') {
     return str_from_cstr_unchecked(path, 3);
@@ -235,7 +235,7 @@ str path_prefix(char* path) {
   return STR_EMPTY;
 }
 
-bool path_is_absolute(char * path) {
+bool path_is_absolute(const char * path) {
   bool is_unix_abs = path[0] == '/';
   bool is_wind_abs = 
   (isalpha(path[0]) && path[1] == ':' && path[2] == '\\')
@@ -244,21 +244,21 @@ bool path_is_absolute(char * path) {
   return is_unix_abs || is_wind_abs;
 }
 
-bool path_is_relative(char* path) {
+bool path_is_relative(const char* path) {
   return !path_is_absolute(path);
 }
 
 // TODO: might be an iterator
-int isseparator(int c) { return c == '/' || c == '\\'; }
-StrList path_components(char* path) {
-  return str_split_when_collect(str_from_cstr(path), isseparator);
+bool c_is_separator(char c) { return c == '/' || c == '\\'; }
+StrList path_components(const char* path) {
+  return str_split_when_collect(str_from_cstr(path), c_is_separator);
 }
 
 // https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
-void path_push(String* sb, char* path) {
+void path_push(String* sb, const char* path) {
   if (path_is_absolute(path)) sb->len = 0;
-  else if (String_last(*sb) != '/' && path[0] != '/') String_push(sb, '/');
+  else if (*String_last(*sb) != '/' && path[0] != '/') String_push(sb, '/');
   String_append_cstr(sb, path);
   String_append_null(sb);
 }
@@ -272,12 +272,12 @@ bool path_pop(String* sb) {
   return true;
 }
 
-void path_set_filename(String* sb, char* filename) {
+void path_set_filename(String* sb, const char* filename) {
   path_pop(sb);
   path_push(sb, filename);
 }
 
-bool path_set_extension(String* sb, char* extension) {
+bool path_set_extension(String* sb, const char* extension) {
   if (sb->len == 0) return false;
 
   String_append_null(sb);
@@ -318,10 +318,10 @@ typedef struct {
 #endif
   bool failed;
   DirEntry curr;
-} DirRead;
+} DirIter;
 
-
-DirRead dir_open(char* dirpath) {
+// TODO: If this fails, set failed failed of DirIter, i don't like this solution
+DirIter dir_open(const char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
 
@@ -341,7 +341,7 @@ DirRead dir_open(char* dirpath) {
   #endif
 
   bool had_error = dir_fd == -1 || dir == NULL;
-  DirRead it = { dir_fd, dir, had_error };
+  DirIter it = { dir_fd, dir, had_error };
 #else
   char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
@@ -361,12 +361,12 @@ DirRead dir_open(char* dirpath) {
   #endif
 
   bool had_error = h == INVALID_HANDLE_VALUE;
-  DirRead it = { data, h, had_error };
+  DirIter it = { data, h, had_error };
 #endif
   return it;
 }
 
-bool dir_close(DirRead* it) {
+bool dir_close(DirIter* it) {
 #ifndef _WIN32
   bool res = closedir(it->dir) == 0;
   #ifdef STC_LOG_ERR
@@ -381,7 +381,9 @@ bool dir_close(DirRead* it) {
   return res;
 }
 
-DirEntry* dir_read(DirRead* it) {
+// TODO: there are currently no way to get an error bool out of this
+// when an error occurs, the iterator simply stops
+DirEntry* dir_read(DirIter* it) {
 #ifndef _WIN32
   int prev_err = errno;
   struct dirent* dp;
@@ -392,7 +394,7 @@ DirEntry* dir_read(DirRead* it) {
   do {
     dp = readdir(it->dir);
 
-    // no more files left
+    // no more files left (or some other error)
     if (dp == NULL) {
       #ifdef STC_LOG_ERR
       if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", it->dir_fd));
@@ -476,9 +478,9 @@ void DirEntries_drop(DirEntries* entries) {
 }
 
 // TODO: what if any function fails? Consider passing DirEntries as pointer and returning success as bool
-DirEntries dir_entries(char* dirpath) {
+DirEntries dir_entries(const char* dirpath) {
   DirEntries entries = {0};
-  DirRead it = dir_open(dirpath);
+  DirIter it = dir_open(dirpath);
 
   for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
     DirEntry to_push = { strdup(entry->name), entry->type };
@@ -493,13 +495,13 @@ int dir_entries_cmp(const void* a, const void* b) {
   char* b_str = ((DirEntry*)b)->name;
   return strcmp(a_str, b_str);
 }
-DirEntries dir_entries_sorted(char* dirpath) {
+DirEntries dir_entries_sorted(const char* dirpath) {
   DirEntries entries = dir_entries(dirpath);
   qsort(entries.data, entries.len, sizeof(DirEntry), dir_entries_cmp);
   return entries;
 }
 
-// DirEntries dir_read_collect(char* dirpath) {
+// DirEntries dir_read_collect(const char* dirpath) {
 //   DirEntries entries = {0};
 //   DirEntry entry = {0};
 
@@ -603,7 +605,7 @@ DirEntries dir_entries_sorted(char* dirpath) {
 
 /////////////////////
 
-bool path_exists(char* path) {
+bool path_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
   return stat(path, &buf) == 0;
@@ -613,7 +615,7 @@ bool path_exists(char* path) {
 #endif
 }
 
-bool file_exists(char* path) {
+bool file_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
   return stat(path, &buf) == 0 && S_ISREG(buf.st_mode);
@@ -622,7 +624,7 @@ bool file_exists(char* path) {
 #endif
 }
 
-bool dir_exists(char* path) {
+bool dir_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
   return stat(path, &buf) == 0 && S_ISDIR(buf.st_mode);
@@ -633,7 +635,7 @@ bool dir_exists(char* path) {
 #endif
 }
 
-FileType file_type(char* path) {
+FileType file_type(const char* path) {
 #ifndef _WIN32
   struct stat buf;
   if (stat(path, &buf) != 0) {
@@ -665,7 +667,7 @@ FileType file_type(char* path) {
 #endif
 }
 
-size_t file_size(char* path) {
+size_t file_size(const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) return 0;
 
@@ -699,7 +701,7 @@ char* dir_current() {
 #endif
 }
 
-bool dir_set_current(char* path) {
+bool dir_set_current(const char* path) {
 #ifndef _WIN32
   bool res = chdir(path) == 0;
 #else
@@ -712,7 +714,7 @@ bool dir_set_current(char* path) {
   return res;
 }
 
-bool file_delete(char* src) {
+bool file_delete(const char* src) {
   int res = remove(src) == 0;
   #ifdef STC_LOG_ERR
   if (!res) fs_err_print(src);
@@ -721,7 +723,7 @@ bool file_delete(char* src) {
 }
 
 
-bool file_move(char* src, char* dst) {
+bool file_move(const char* src, const char* dst) {
 #ifndef _WIN32
   int res = rename(src, dst) == 0;
   #ifdef STC_LOG_ERR
@@ -737,12 +739,12 @@ bool file_move(char* src, char* dst) {
 #endif
 }
 
-bool file_move_src_if_dst_not_exists(char* src, char* dst) {
+bool file_move_src_if_dst_not_exists(const char* src, const char* dst) {
   if (file_exists(dst)) return false;
   else return file_move(src, dst);
 }
 
-bool dir_create(char* path) {
+bool dir_create(const char* path) {
   if (dir_exists(path)) return true;
   
 #ifndef _WIN32
@@ -758,7 +760,7 @@ bool dir_create(char* path) {
   return res;
 }
 
-bool dir_create_recursive(char* path) {
+bool dir_create_recursive(const char* path) {
   fs_tmp_sb.len = 0;
   StrList components = path_components(path);
 
@@ -780,11 +782,11 @@ bool dir_create_recursive(char* path) {
   return !had_error;
 }
 
-bool dir_move(char* src, char* dst) {
+bool dir_move(const char* src, const char* dst) {
   return file_move(src, dst);
 }
 
-bool dir_delete(char* path) {
+bool dir_delete(const char* path) {
   if (!dir_exists(path)) return true;
   
 #ifndef _WIN32
@@ -801,7 +803,7 @@ bool dir_delete(char* path) {
   return res;
 }
 
-bool file_create_if_not_exists(char* path) {
+bool file_create_if_not_exists(const char* path) {
   if (file_exists(path)) return false;
 
 #ifndef _WIN32
@@ -839,7 +841,7 @@ bool file_create_if_not_exists(char* path) {
   return true;
 }
 
-bool file_create_recursive(char* path) {
+bool file_create_recursive(const char* path) {
   str parent = path_parent(path);
   fs_tmp_sb.len = 0;
   String_append_str(&fs_tmp_sb, parent);
@@ -850,7 +852,7 @@ bool file_create_recursive(char* path) {
 }
 
 
-bool file_copy(char* src, char* dst, bool overwrite) {
+bool file_copy(const char* src, const char* dst, bool overwrite) {
 #ifndef _WIN32
   int src_fd = open(src, O_RDONLY, 0);
 
@@ -920,12 +922,12 @@ bool file_copy(char* src, char* dst, bool overwrite) {
 #endif
 }
 
-bool dir_copy_recursive(char* src, char* dst) {
+bool dir_copy_recursive(const char* src, const char* dst) {
   if (!dir_create_recursive(dst)) {
     return false;
   }
 
-  DirRead it = dir_open(src);
+  DirIter it = dir_open(src);
   if (it.failed) return false;
 
   /*
@@ -964,13 +966,13 @@ bool dir_copy_recursive(char* src, char* dst) {
 }
 
 
-bool dir_delete_recursive(char* path) { 
+bool dir_delete_recursive(const char* path) { 
   if (path_is_absolute(path)) {
     fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE DIRECTORY, ABORTING\n");
     return false;
   }
 
-  DirRead it = dir_open(path);
+  DirIter it = dir_open(path);
   if (it.failed) return false;
 
   String sb = String_from_cstr(path);

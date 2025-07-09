@@ -87,4 +87,8 @@ int main() {
   listfor(int, i, &r) {
     printf("%d\n", r.data[i]);
   }
+
+  int test_buf[100] = {0};
+  IntList const_test = IntList_from_array(test_buf, 100);
+  const_test = IntList_from_array(r.data, r.len);
 }
