@@ -12,7 +12,17 @@
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
+
 // TODO: deal with indexes sizes
+// TODO: bitflags?
+// TODO: bitfields?
+// TODO: not sure if i want insert and remove
+// TODO: not sure about returning pointers for first() and last(). What if list gets reallocated?
+// TODO: seriously consider a slice type
+// TODO: array_heap_to_list() is extremely dangerous, heres why we need slices
+// TODO: chunks and windows iterator
+// TODO: next_perm(), prev_perm()
+
 
 #define list_def(type, name) \
 typedef struct { \
@@ -34,9 +44,12 @@ void name##_resize(name* l, size_t new_len, type value) { \
     l->len = new_len; \
   } else { \
     name##_reserve(l, l->len + new_len); \
-    size_t range = (new_len - l->len); \
+    /*size_t range = (new_len - l->len); \
     for (int i=0; i<range; ++i) { \
       l->data[l->len + i] = value; \
+    } */ \
+    rangefor(int, i, l->len, new_len) { \
+      l->data[i] = value; \
     } \
     l->len = new_len; \
   } \
@@ -65,30 +78,6 @@ type name##_pop(name* l) { \
   return l->data[--l->len]; \
 } \
  \
-typedef bool (*name##CmpFn)(const type* a, const type* b); \
-int name##_find(name* l, type value, name##CmpFn pred) { \
-  for(int i=0; i<l->len; ++i) { \
-    const type* a = (const type*) &l->data[i]; \
-    const type* b = (const type*) &value; \
-    if (pred(a, b)) \
-      return i; \
-  } \
- \
-  return -1; \
-} \
- \
-typedef bool (*name##FilterFn)(const type* val); \
-void name##_filter(name* l, name##FilterFn pred) { \
-  size_t curr = 0; \
-  for(int i=0; i < l->len; ++i) { \
-    const type* val = (const type*) &l->data[i]; \
-    if (pred(val)) { \
-      l->data[curr++] = l->data[i]; \
-    } \
-  } \
-  l->len = curr; \
-} \
- \
 void name##_swap(name* l, size_t a, size_t b) { \
   name##_assert(*l, a); \
   name##_assert(*l, b); \
@@ -97,13 +86,14 @@ void name##_swap(name* l, size_t a, size_t b) { \
   l->data[b] = tmp; \
 } \
  \
-void name##_shuffle(name* l) { \
+name name##_shuffle(name* l) { \
   /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
   srand(time(NULL)); \
   for(int i=l->len-1; i>0; --i) { \
     int r = rand() % (i+1); \
     name##_swap(l, i, r); \
   } \
+  return *l; \
 } \
 type name##_remove_swap(name* l, size_t i) { \
   name##_assert(*l, i); \
@@ -112,7 +102,28 @@ type name##_remove_swap(name* l, size_t i) { \
   l->data[i] = l->data[l->len]; \
   return res; \
 } \
-\
+ \
+typedef bool (*name##CmpFn)(const type* a, const type* b); \
+int name##_find(const name* l, type value, name##CmpFn pred) { \
+  const type* b = (const type*) &value; \
+  listfor(int, i, l) { \
+    const type* a = (const type*) &l->data[i]; \
+    if (pred(a, b) == 0) return i; \
+  } \
+ \
+  return -1; \
+} \
+ \
+bool name##_contains(const name* l, type value, name##CmpFn pred) { \
+  return name##_find(l, value, pred) != -1; \
+} \
+ \
+void name##_reverse(name* l) { \
+  for(int left=0, right=l->len-1; left<right; ++left, --right) { \
+    name##_swap(l, left, right); \
+  } \
+} \
+ \
 void name##_append_array(name* l, const type* arr, size_t arr_len) { \
   name##_reserve(l, l->len + arr_len); \
   memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
@@ -125,10 +136,21 @@ name name##_from_array(const type* arr, size_t arr_len) { \
   return res; \
 } \
  \
+name array_heap_to_##name(type** arr, size_t arr_len) { \
+  name res = {0}; \
+  res.len = arr_len; \
+  /* trick: if we set cap to 0, next time we push, will be reallocated accordingly to len */ \
+  /* this way, we don't need to realloc here! */ \
+  res.cap = 0; \
+  res.data = *arr; \
+  *arr = NULL; \
+  return res; \
+} \
+ \
 void name##_append(name* this, name other) { \
   name##_append_array(this, (const type*) other.data, other.len); \
 } \
-\
+ \
 name name##_clone(name l) { \
   return name##_from_array((const type*) l.data, l.len); \
 } \
@@ -139,132 +161,79 @@ void name##_free(name* l) { \
   l->len = 0; \
   l->data = NULL; \
 } \
+ \
+bool name##_is_sorted(const name* l, name##CmpFn pred) { \
+  for(int i=0; i<l->len-1; ++i) { \
+    const type* a = (const type*) &l->data[i]; \
+    const type* b = (const type*) &l->data[i+1]; \
+    if (pred(a, b) >= 0) return false; \
+  } \
+  return true; \
+} \
+ \
+name name##_sort(name* l, name##CmpFn pred) { \
+  /* we cast the function pointer because we are crazy and we can do that */ \
+  qsort(l->data, l->len, sizeof(type), (int (*)(const void*, const void*)) pred); \
+  return *l; \
+} \
+ \
+typedef bool (*name##EqFn)(const type* val); \
+bool name##_all(name* l, name##EqFn pred) { \
+  listfor(int, i, l) { \
+    const type* it = (const type*) &l->data[i]; \
+    if (!pred(it)) return false; \
+  } \
+  return true; \
+} \
+ \
+bool name##_any(name* l, name##EqFn pred) { \
+  listfor(int, i, l) { \
+    const type* it = (const type*) &l->data[i]; \
+    if (pred(it)) return true; \
+  } \
+  return false; \
+} \
+ \
+size_t name##_count(name* l, name##EqFn pred) { \
+  size_t count = 0; \
+  listfor(int, i, l) { \
+    const type* it = (const type*) &l->data[i]; \
+    count += pred(it); \
+  } \
+  return count; \
+} \
+ \
+name name##_filter(name* l, name##EqFn pred) { \
+  size_t curr = 0; \
+  listfor(int, i, l) { \
+    const type* it = (const type*) &l->data[i]; \
+    if (pred(it)) l->data[curr++] = l->data[i]; \
+  } \
+  l->len = curr; \
+  return *l; \
+} \
+ \
+name name##_dedup(name* l, name##CmpFn pred) { \
+  if (! name##_is_sorted(l, pred)) name##_sort(l, pred); \
+  size_t curr = 0; \
+  for (int i=0; i<l->len-1; ++i) { \
+    const type* a = (const type*) &l->data[i]; \
+    const type* b = (const type*) &l->data[i+1]; \
+    if (pred(a, b) < 0) l->data[curr++] = l->data[i]; \
+  } \
+  l->len = curr; \
+  return *l; \
+} \
+type* name##_bsearch(name* l, type val, name##CmpFn pred) { \
+  return bsearch( \
+    (const type*) &val, \
+    (const type*) l->data, \
+    sizeof(type), \
+    l->len, \
+    (int (*)(const void*, const void*)) pred \
+  ); \
+} \
 
 list_def(int, IntList)
 
 #endif
-
-/*
-
-typedef struct<T> {
-  size_t len, cap;
-  T* data;
-} List<T>;
-
-void list_reserve(List<T>* l, size_t new_cap) {
-  if (new_cap > l->cap) {
-    l->cap = l->cap == 0 ? 16 : l->cap;
-    while (new_cap > l->cap) l->cap *= 2;
-
-    l->data = realloc(l->data, sizeof(l->data[0]) * l->cap);
-    assert(l->data != NULL && "list realloc failed");
-  }
-}
-
-void list_resize(List<T>* l, size_t new_len, type value) {
-  if (new_len <= l->len) {
-    l->len = new_len;
-  } else {
-    list_reserve(l, l->len + new_len);
-    for (int i=0; i<new_len; ++i) {
-      l->data[l->len + i] = value;
-    }
-  }
-}
-
-void list_push(List<T>* l, T value) {
-  list_reserve(l, l->len + 1);
-  l->data[l->len++] = value;
-}
-
-T list_first(List<T>* l) {
-  return l->data[0];
-}
-T list_last(List<T>* l) {
-  return l->data[l->len-1];
-}
-
-T list_pop(List<T>* l) {
-  return l->data[--l->len];
-}
-
-void list_assert(List<T>* l, size_t i) {
-  assert(i < l->len && "list access out of bounds");
-}
-
-typedef bool (*listCmpFn)(T a, T b);
-int list_find(List<T>* l, T value, listCmpFn pred) {
-  for(size_t i=0; i<l->len; ++i) {
-    if (pred(l->data[i], value)) return i;
-  }
-
-  return -1;
-}
-
-typedef bool (*listFilterFn)(T val);
-void list_filter(List<T>* l, listFilterFn pred) {
-  size_t curr = 0;
-  for(size_t i=0; i < l->len; ++i) {
-    if (pred(l->data[i])) {
-      l->data[curr++] = l->data[i];
-    }
-  }
-  l->len = curr;
-}
-
-void list_swap(List<T>* l, size_t a, size_t b) {
-  list_assert(l, a);
-  list_assert(l, b);
-  T tmp = l->data[a];
-  l->data[a] = l->data[b];
-  l->data[b] = tmp;
-}
-
-T list_remove_swap(List<T>* l, size_t i) {
-  list_assert(l, i);
-  l->len--;
-  T res = l->data[i];
-  l->data[i] = l->data[l->len];
-  return res;
-}
-
-void list_append(List<T>* this, List<T> other) {
-  list_reserve(this, this->len + other.len);
-  // size_t len = this->len;
-  // for(size_t i=0; i<other.len; ++i) {
-  //   this->data[len + i] = other.data[i];
-  // }
-  // this->len += other.len;
-  memcpy(this->data + this->len, other.data, other.len);
-  this->len += other.len;
-}
-
-name list_from_array(T* arr, size_t arr_len) {
-  name res = {0};
-  list_reserve(&res, arr_len);
-  // for(size_t i=0; i<arr_len; ++i) {
-  //   res.data[res.len++] = arr[i];
-  // }
-  memcpy(res.data, arr, arr_len);
-  res.len = arr_len;
-  return res;
-}
-\
-void list_append_array(List<T>* l, T* arr, size_t arr_len) {
-  list_reserve(l, l->len + len);
-  // size_t len = l->len;
-  // for(size_t i=0; i<arr_len; ++i) {
-  //   l->data[len + i] = arr[i];
-  // }
-  memcpy(l->data + l->len, arr, arr_len);
-  l->len += arr_len;
-}
-
-void list_free(List<T>* l) {
-  free(l->data);
-  l->cap = 0;
-  l->len = 0;
-  l->data = NULL;
-}
-
-*/

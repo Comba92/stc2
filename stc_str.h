@@ -222,6 +222,7 @@ str str_take_until(str s, str target) {
 
 typedef bool (*CharPredicate)(char val);
 
+// TODO: these can just be str_skip
 int str_advance_while(str s, CharPredicate p) {
   listfor(int, i, &s) {
     if (!p(s.data[i])) return i;
@@ -265,8 +266,8 @@ bool str_starts_with(str s, str start) {
   return str_eq(prefix, start);
 }
 bool str_ends_with(str s, str end) {
-  str postfix = str_skip(s, s.len - end.len);
-  return str_eq(postfix, end);
+  str suffix = str_skip(s, s.len - end.len);
+  return str_eq(suffix, end);
 }
 
 str str_strip_prefix(str s, str prefix) {
@@ -274,8 +275,8 @@ str str_strip_prefix(str s, str prefix) {
   else return s;
 }
 
-str str_strip_postfix(str s, str postfix) {
-  if (str_ends_with(s, postfix)) return str_skip(s, postfix.len);
+str str_strip_suffix(str s, str suffix) {
+  if (str_ends_with(s, suffix)) return str_skip(s, suffix.len);
   else return s;
 }
 
@@ -347,9 +348,6 @@ StrList str_words_collect(str s) {
 
 //////////////////////
 
-#define str_iter_done(it) ((it).src.len == 0)
-#define str_iter(s, next, it) for(str s; (it)->src.len > 0; s = next((it)))
-
 // End condition for all str iterators: src.len == 0
 
 typedef struct {
@@ -369,6 +367,10 @@ StrMatches str_matches(str s, str target) {
   }
 }
 
+bool str_has_match(const StrMatches* it) {
+  return it->last_match != -1;
+}
+
 int str_next_match(StrMatches* it) {
   if (it->last_match == -1) return -1;
 
@@ -376,7 +378,6 @@ int str_next_match(StrMatches* it) {
   int idx = it->skipped;
   
   int match = str_match(it->src, it->target);
-  it->last_match = match;
   if (match == -1) {
     it->skipped += it->src.len;
     it->src = STR_EMPTY;  
@@ -384,10 +385,12 @@ int str_next_match(StrMatches* it) {
     it->skipped += last+1;
     it->src = str_skip(it->src, match+1);
   }
+  it->last_match = match;
 
   return idx + last;
 }
 
+// TODO: this is clutter, consider removing it
 typedef struct {
   str src;
   const char c;
@@ -395,6 +398,10 @@ typedef struct {
 
 StrSplitChar str_splitc(str s, char c) {
   return (StrSplitChar) { s, c };
+}
+
+bool str_has_splitc(const StrSplitChar* it) {
+  return it->src.len > 0;
 }
 
 str str_next_splitc(StrSplitChar* it) {
@@ -419,6 +426,10 @@ StrSplit str_split(str s, str pattern) {
   return (StrSplit) { s, pattern };
 }
 
+bool str_has_split(const StrSplit* it) {
+  return it->src.len > 0;
+}
+
 str str_next_split(StrSplit* it) {
   int i = str_match(it->src, it->pattern);
   if (i == -1) {
@@ -441,6 +452,10 @@ StrSplitWhen str_split_when(str s, CharPredicate pred) {
   return (StrSplitWhen) { s, pred };
 }
 
+bool str_has_split_when(const StrSplitWhen* it) {
+  return it->src.len > 0;
+}
+
 str str_next_split_when(StrSplitWhen* it) {
   int i = str_advance_while_not(it->src, it->pred);
   str res = str_take(it->src, i);
@@ -454,6 +469,9 @@ typedef StrSplitChar StrLines;
 StrLines str_lines(str s) {
   return str_splitc(s, '\n');
 }
+bool str_has_line(const StrLines* it) {
+  return str_has_splitc(it);
+}
 str str_next_line(StrLines* it) {
   return str_next_splitc(it);
 }
@@ -461,6 +479,9 @@ str str_next_line(StrLines* it) {
 typedef StrSplitWhen StrWords;
 StrWords str_words(str s) {
   return str_split_when(s, c_is_space);
+}
+bool str_has_word(const StrWords* it) {
+  return str_has_split_when(it);
 }
 str str_next_word(StrWords* it) {
   return str_next_split_when(it);
@@ -511,6 +532,10 @@ String String_from_cstr(const char* s) {
   return sb;
 }
 
+String cstr_heap_to_String(char** s) {
+  return array_heap_to_String(s, strlen(*s));
+}
+
 String String_from_str(str s) {
   return String_from_array(s.data, s.len);
 }
@@ -523,7 +548,7 @@ char* String_to_cstr(String sb) {
 }
 
 // TODO: this is not thread safe retard
-static String tmp_sb = {0};
+static __thread String tmp_sb = {0};
 
 char* str_fmt_tmp(const char* fmt, ...) {
   va_list args;
@@ -566,6 +591,13 @@ String String_fmt(String* sb, const char* fmt, ...) {
   String_append_cstr(sb, tmp_sb.data);
 
   return *sb;
+}
+
+char* readline_stdin(String* sb) {
+  char* res = fgets(sb->data, sb->cap, stdin);
+  if (res == NULL || ferror(stdin) != 0) return "";
+  sb->len = 0;
+  return sb->data;
 }
 
 int str_parse_int(str s) {
@@ -618,7 +650,7 @@ String str_repeat(String* sb, str sv, size_t n) {
   return *sb;
 }
 
-#define strforeach(c, s) for(const char* c = (s)->data; c < (s)->data + (s)->len; ++c)
+#define strforeach(c, s) listforeach(const char, c, s)
 
 // returns itself
 String str_to_upper(String* sb, str sv) {
@@ -684,7 +716,7 @@ String str_replace_all(String* sb, str sv, str from, str to) {
   
   sb->len = 0;
   int last = 0;
-  while (!str_iter_done(it)) {
+  while (str_has_match(&it)) {
     int match = str_next_match(&it);
     String_append_str(sb, str_slice(sv, last, match));
     String_append_str(sb, to);

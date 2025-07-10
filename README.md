@@ -114,28 +114,66 @@ If **len** is 0, this function panics.
 Appends all elements of *other* at the back of *this*, increasing *this*'s **len** accordingly.
 This uses [memcpy()](https://en.cppreference.com/w/cpp/string/byte/memcpy.html) for fast copying.
 
-#### `void list_append_array(List* this, T* arr, size_t len)`
-Appends elements from pointer *arr** up until *len*, increasing *this*'s **len** accordingly.
+#### `void list_append_array(List* this, T* arr, size_t arr_len)`
+Appends elements from pointer *arr* up until *arr_len*, increasing *this*'s **len** accordingly.
 This uses memcpy() for fast copying.
 
-#### `List list_from_array(T* arr, size_t len)`
-Returns a newly allocated list taking elements from pointer **arr** up until **len**.
+#### `List list_from_array(T* arr, size_t larr_len)`
+Returns a newly allocated list taking elements from pointer *arr* up until *arr_len*.
 This uses memcpy() for fast copying.
+
+#### `List array_heap_to_list(T** arr, size_t arr_len)`
+Returns a new list, by taking ownership of the heap-allocated *arr*. No allocations nor copies will take place.
+This will simply assign the *\*arr* pointer to the returned list's **data**. 
+> [!WARNING]
+> **arr** will be set to NULL after this call, as it is now owned by the list. 
+> [!WARNING]
+> **arr** must be a pointer returned by malloc. Passing any other pointer will result in a panic the next push operation, as realloc will fail.
+> If you want to pass a stack array, or any other pointer, consider using list_from_array(), which will copy the data into the list instead.
 
 #### `List list_clone(List l)`
 Returns a newly allocated list by deep copying *l*.
 This uses memcpy() for fast copying.
 
-#### `void list_shuffle(List* l)`
-Shuffles the values of *l* randomly, using [Knuth's algorithm](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle). The algorithm has O(n) complexity.
+
+#### `List list_shuffle(List* l)`
+Shuffles the values of *l* randomly, using [Knuth's algorithm](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle). 
+Returns itself.
+The algorithm has O(n) complexity.
 It uses libc's [rand()](https://man7.org/linux/man-pages/man3/rand.3.html) as RNG, so it might not have good statistical properties.
 
-#### `int list_find(List* l, T value, bool (\*pred)(const T\* a, const T\* b))`
-Searches for *value* in *l*, using the comparison function *pred*. If found, returns its index, otherwise -1.
+### Algorithms
+```c
+typedef bool (*ListCmpFn)(const T* a, const T* b);
+typedef bool (*ListEqFn)(const T* x);
+```
 
-#### `void list_filter(List* l, bool (\*pred)(const T\* val))`
-Filters *l* in place, keeping only the elements accepted by *pred*. **len** is set accordingly.
+#### `int list_find(const List* l, T value, ListCmpFn pred)`
+Searches for *value* in *l*, comparing using the function *pred*. If found, returns its index, otherwise -1.
 
+#### `bool list_contains(const List* l, T value, ListCmpFn pred)`
+Returns true if *l* contains *value*, comparing using the function *pred*.
+
+#### `bool list_is_sorted(const List* l, ListCmpFn pred)`
+Returns true if *l* is sorted in ascending order, according to the comparison function *pred*.
+
+#### `List list_sort(List* l, ListCmpFn pred)`
+Sorts *l* in-place using libc's [qsort()]((https://en.cppreference.com/w/c/algorithm/qsort.html)), according to the comparison function *pred*. Returns itself.
+
+#### `List list_dedup(List* l, ListCmpFn pred)`
+Removes all duplicates of *l* in-place, according to the comparison function *pred*. If *l* is already sorted, this has complexity O(n), otherwise, it has complexity O(n logn), has it has to first sort. **len** is set accordingly. Returns itself.
+
+#### `List list_filter(List* l, ListEqFn pred)`
+Filters *l* in-place, keeping only the elements accepted by *pred*. **len** is set accordingly. All filtered elements will mantain original order. Returns itself.
+
+#### `T* list_bsearch(List* l, ListEqFn pred)` 
+
+#### `List list_reverse(List *l)`
+Reverses *l* elements in-place. Returns itself.
+
+#### `bool list_all(List* l, ListEqFn pred)`
+#### `bool list_any(List* l, ListEqFn pred)`
+#### `size_t list_count(List* l, ListEqFn pred)`
 
 #### `void list_reserve(List* l, size_t new_cap)`
 If *new_cap* is bigger than *l*'s **cap**, reallocates its **data** to contain at least *new_cap* elements. The new capacity **cap** is always guaranteed to be a mutliple of two.
@@ -215,13 +253,14 @@ str str_take_rev(str s, size_t n) {
 
 str str_skip_untilc(str s, char c) {
 str str_skip_rev_untilc(str s, char c) {
+str str_take_untilc(str s, char c) {
+str str_take_rev_untilc(str s, char c) {
 str str_skip_until(str s, str target) {
+str str_take_until(str s, str target) {
+
 str str_skip_while(str s, CharPredicate p) {
 str str_skip_rev_while(str s, CharPredicate p) {
 
-str str_take_untilc(str s, char c) {
-str str_take_rev_untilc(str s, char c) {
-str str_take_until(str s, str target) {
 str str_take_while(str s, CharPredicate p) {
 str str_take_rev_while(str s, CharPredicate p) {
 
@@ -246,21 +285,27 @@ StrList str_lines_collect(str s) {
 StrList str_words_collect(str s) {
 
 StrMatches str_matches(str s, str target) {
+bool str_has_match(const StrMatches* it) {
 int str_next_match(StrMatches* it) {
 
 StrSplitChar str_splitc(str s, char c) {
+bool str_has_splitc(const StrSplitChar* it) {
 str str_next_splitc(StrSplitChar* it) {
 
 StrSplit str_split(str s, str pattern) {
+bool str_has_split(const StrSplit* it) {
 str str_next_split(StrSplit* it) {
 
 StrSplitWhen str_split_when(str s, CharPredicate pred) {
+bool str_has_split_when(const StrSplitWhen* it) {
 str str_next_split_when(StrSplitWhen* it) {
 
 StrLines str_lines(str s) {
+bool str_has_line(const StrLines* it) {
 str str_next_line(StrLines* it) {
 
 StrWords str_words(str s) {
+bool str_has_word(const StrWords* it) {
 str str_next_word(StrWords* it) {
 
 
@@ -269,12 +314,14 @@ void String_append_null(String* sb) {
 void String_append_cstr(String* sb, const char* s) {
 void String_append_str(String* sb, str sv) {
 String String_from_cstr(const char* s) {
+String cstr_to_String(char** s) {
 String String_from_str(str s) {
 char* String_to_cstr(String sb) {
 
 char* str_fmt_tmp(const char* fmt, ...) {
 String String_fmt(String* sb, const char* fmt, ...) {
-
+bool readline_stdin(String* sb) {
+ 
 int str_parse_int(str s) {
 double str_parse_float(str s) {
 String int_to_str(String* sb, int n) {

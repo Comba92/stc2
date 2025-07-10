@@ -230,7 +230,7 @@ char* path_to_absolute(const char* path) {
 
 str path_prefix(const char* path) {
   if (path[0] == '/') return str_from_cstr_unchecked("/", 1);
-  else if (isalpha(path[0]) && path[1] == ':' && path[2] == '\\') {
+  else if (c_is_alpha(path[0]) && path[1] == ':' && path[2] == '\\') {
     return str_from_cstr_unchecked(path, 3);
   }
   // TODO: windows other weird prefixes aren't supported
@@ -241,7 +241,7 @@ str path_prefix(const char* path) {
 bool path_is_absolute(const char * path) {
   bool is_unix_abs = path[0] == '/';
   bool is_wind_abs = 
-  (isalpha(path[0]) && path[1] == ':' && path[2] == '\\')
+  (c_is_alpha(path[0]) && path[1] == ':' && path[2] == '\\')
   || (path[0] == '\\' && path[1] == '\\');
 
   return is_unix_abs || is_wind_abs;
@@ -319,11 +319,11 @@ typedef struct {
   WIN32_FIND_DATA data;
   HANDLE h;
 #endif
-  bool failed;
+  bool finished;
   DirEntry curr;
 } DirIter;
 
-// TODO: If this fails, set failed failed of DirIter, i don't like this solution
+// TODO: should precompute at least first element?
 DirIter dir_open(const char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -381,11 +381,17 @@ bool dir_close(DirIter* it) {
   if (!res) fs_err_print(str_fmt_tmp("Closing dir handle %p", it->h));
   #endif
 #endif
+  it->finished = true;
   return res;
+}
+
+bool dir_scanning(const DirIter* it) {
+  return !it->finished;
 }
 
 // TODO: there are currently no way to get an error bool out of this
 // when an error occurs, the iterator simply stops
+// TODO: on error/end, should return NULL or empty struct?
 DirEntry* dir_read(DirIter* it) {
 #ifndef _WIN32
   int prev_err = errno;
@@ -434,7 +440,7 @@ DirEntry* dir_read(DirIter* it) {
 
   if (close(fd) != 0) {
     #ifdef STC_LOG_ERR
-    fs_err_print(entry.name);
+    fs_err_print(it->curr.name);
     #endif
   };
 #else
@@ -863,7 +869,7 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
     return false;
   }
 
-  int flags = overwrite ? O_TRUNCATE : 0;
+  int flags = overwrite ? O_TRUNC : 0;
   int dst_fd = open(dst, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
 
   if (dst_fd == -1) {
@@ -928,7 +934,7 @@ bool dir_copy_recursive(const char* src, const char* dst) {
   }
 
   DirIter it = dir_open(src);
-  if (it.failed) return false;
+  if (it.finished) return false;
 
   /*
     https://man7.org/linux/man-pages/man3/readdir.3.html
@@ -973,7 +979,7 @@ bool dir_delete_recursive(const char* path) {
   }
 
   DirIter it = dir_open(path);
-  if (it.failed) return false;
+  if (it.finished) return false;
 
   String sb = String_from_cstr(path);
 

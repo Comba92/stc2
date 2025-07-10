@@ -8,6 +8,7 @@
 #include "stc_str.h"
 
 // TODO: can search be merged into one?
+// TODO: rework iterators
 
 // https://theartincode.stanis.me/008-djb2/
 long djb2(const char *s, size_t len)
@@ -215,6 +216,10 @@ name##Iter name##_iter(const name* m) { \
   return it; \
 }  \
  \
+bool name##_has(name##Iter* it) { \
+  return it->curr != NULL; \
+} \
+ \
 name##Entry* name##_next(name##Iter* it) { \
   if (it->curr == NULL) return NULL; \
  \
@@ -229,6 +234,8 @@ name##Entry* name##_next(name##Iter* it) { \
 
 #define map_iter(type, ent, it) for(type##Entry* ent; (ent = type##_next(it)) != NULL;)
 #define set_iter(ent, it) for(str* ent; (ent = Set_next(it)) != NULL)
+
+// TODO: wouldn't it be more effficient to store u32 or u64 for bits?
 
 typedef struct {
   size_t cap, len;
