@@ -17,8 +17,8 @@ bool int_is_even(const int* val) {
   return *val % 2 == 0;
 }
 
-bool int_cmp(const int* a, const int* b) {
-  return *a == *b;
+int int_cmp(const int* a, const int* b) {
+  return *a - *b;
 }
 
 int main() {
@@ -41,10 +41,11 @@ int main() {
   }
   printf("len = %d, cap = %d\n", list.len, list.cap);
 
-  printf("Value 30 at index: %d\n", IntList_find(&list, 30, *int_cmp));
-  printf("Value 5 at index: %d\n", IntList_find(&list, 5, *int_cmp));
+  printf("Value 30 at index: %d\n", IntList_find(&list, 30, int_cmp));
+  printf("Value 5 at index: %d\n", IntList_find(&list, 5, int_cmp));
 
-  IntList_filter(&list, *int_is_even);
+  printf("Filtering:\n");
+  IntList_filter(&list, int_is_even);
   listfor(int, i, &list) {
     printf("%d = %d\n", i, list.data[i]);
   }
@@ -88,7 +89,7 @@ int main() {
     printf("%d\n", r.data[i]);
   }
   printf("\n\n");
-  IntList_sort(&r, *int_cmp);
+  IntList_sort(&r, int_cmp);
   listfor(int, i, &r) {
     printf("%d\n", r.data[i]);
   }

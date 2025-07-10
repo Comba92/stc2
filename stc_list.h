@@ -13,7 +13,7 @@
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
 
-// TODO: deal with indexes sizes
+// TODO: deal with indexes sizes, just fucking use stdint.h
 // TODO: bitflags?
 // TODO: bitfields?
 // TODO: not sure if i want insert and remove
@@ -103,7 +103,7 @@ type name##_remove_swap(name* l, size_t i) { \
   return res; \
 } \
  \
-typedef bool (*name##CmpFn)(const type* a, const type* b); \
+typedef int (*name##CmpFn)(const type* a, const type* b); \
 int name##_find(const name* l, type value, name##CmpFn pred) { \
   const type* b = (const type*) &value; \
   listfor(int, i, l) { \
@@ -224,14 +224,15 @@ name name##_dedup(name* l, name##CmpFn pred) { \
   l->len = curr; \
   return *l; \
 } \
-type* name##_bsearch(name* l, type val, name##CmpFn pred) { \
-  return bsearch( \
+size_t name##_bsearch(name* l, type val, name##CmpFn pred) { \
+  type* res = bsearch( \
     (const type*) &val, \
     (const type*) l->data, \
     sizeof(type), \
     l->len, \
     (int (*)(const void*, const void*)) pred \
   ); \
+  return res - l->data; \
 } \
 
 list_def(int, IntList)
