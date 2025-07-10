@@ -7,8 +7,9 @@
 #include <assert.h>
 #include "stc_str.h"
 
-// TODO: can search be merged into one?
 // TODO: rework iterators
+// TODO: map_get() should return pointer?
+// TODO: arena keys
 
 // https://theartincode.stanis.me/008-djb2/
 long djb2(const char *s, size_t len)
@@ -82,30 +83,15 @@ name##Entry* name##_search(const name* m, str key) { \
   size_t retries = 0; \
   while (!map_key_is_empty(e->key) && retries < m->cap) { \
     if (!map_key_is_removed(e->key) && str_cmp(e->key, key) == 0) return e; \
-    i = map_next_hash(i, retries+1, m->cap); \
-    e = &m->entries[i]; \
     retries += 1; \
+    i = map_next_hash(i, retries, m->cap); \
+    e = &m->entries[i]; \
   } \
  \
   return NULL; \
 } \
  \
-name##Entry* name##_search_for_insert(const name* m, str key) { \
-  /* invariant: this can't fail to find an entry, as we always increase cap first */ \
-  size_t i = map_hash_key(key, m->cap); \
-  name##Entry* e = &m->entries[i]; \
- \
-  size_t retries = 0; \
-  while (!map_key_is_empty(e->key)) { \
-    if (map_key_is_removed(e->key) || str_cmp(e->key, key) == 0) return e; \
-    i = map_next_hash(i, retries+1, m->cap); \
-    e = &m->entries[i]; \
-    retries += 1; \
-  } \
- \
-  return e; \
-} \
- \
+bool name##_insert(name*, str, type); \
 void name##_reserve(name* m, size_t new_cap) { \
   if (new_cap > m->cap) { \
     name new_map = {0}; \
@@ -125,9 +111,7 @@ void name##_reserve(name* m, size_t new_cap) { \
     for(int i=0; i<m->cap; ++i) { \
       name##Entry* e = &m->entries[i]; \
       if (!map_key_is_marker(e->key)) { \
-        name##Entry* new_entry = name##_search_for_insert(&new_map, e->key); \
-        new_entry->key = e->key; \
-        new_entry->val = e->val; \
+        name##_insert(m, e->key, e->val); \
       } \
     } \
  \
@@ -153,7 +137,18 @@ bool name##_contains(const name* m, str key) { \
  \
 bool name##_insert(name* m, str key, int val) { \
   name##_reserve(m, m->len+1); \
-  name##Entry* e = name##_search_for_insert(m, key); \
+  /* invariant: this can't fail to find an entry, as we always increase cap first */ \
+  size_t i = map_hash_key(key, m->cap); \
+  name##Entry* e = &m->entries[i]; \
+ \
+  size_t retries = 0; \
+  while (!map_key_is_empty(e->key)) { \
+    if (map_key_is_removed(e->key) || str_cmp(e->key, key) == 0) break; \
+    retries += 1; \
+    i = map_next_hash(i, retries, m->cap); \
+    e = &m->entries[i]; \
+  } \
+ \
   e->val = val; \
  \
   if (map_key_is_empty(e->key)) { \
@@ -270,23 +265,6 @@ int Set_search(const Set* s, str key) {
   return -1;
 }
 
-int Set_search_for_insert(const Set* s, str key) {
-  size_t i = map_hash_key(key, s->cap);
-  str fkey = s->keys[i];
-
-  int retries = 0;
-  while (!map_key_is_empty(fkey)) {
-    if (map_key_is_removed(fkey)) break;
-    if (str_cmp(key, fkey) == 0) return -1;
-
-    i = map_next_hash(i, retries+1, s->cap);
-    fkey = s->keys[i];
-    retries += 1;
-  }
-
-  return i;
-}
-
 bool Set_insert(Set*, str);
 void Set_reserve(Set* s, size_t new_cap) {
   if (new_cap > s->cap) {
@@ -334,7 +312,17 @@ bool Set_contains(const Set* s, str key) {
 bool Set_insert(Set* s, str key) {
   Set_reserve(s, s->len+1);
 
-  int i = Set_search_for_insert(s, key);
+  size_t i = map_hash_key(key, s->cap);
+  str fkey = s->keys[i];
+  int retries = 0;
+  while (!map_key_is_empty(fkey)) {
+    if (map_key_is_removed(fkey)) break;
+    if (str_cmp(key, fkey) == 0) i = -1; break;
+    retries += 1;
+    i = map_next_hash(i, retries, s->cap);
+    fkey = s->keys[i];
+  }
+
   // already inserted
   if (i == -1) return false;
 
@@ -399,6 +387,10 @@ SetIter Set_iter(const Set* s) {
   it.curr = i < s->cap ? &s->keys[i] : NULL;
 
   return it;
+}
+
+bool Set_has(const Set* s) {
+  return s->curr != NULL;
 }
 
 str* Set_next(SetIter* it) {

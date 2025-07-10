@@ -222,7 +222,6 @@ str str_take_until(str s, str target) {
 
 typedef bool (*CharPredicate)(char val);
 
-// TODO: these can just be str_skip
 int str_advance_while(str s, CharPredicate p) {
   listfor(int, i, &s) {
     if (!p(s.data[i])) return i;
