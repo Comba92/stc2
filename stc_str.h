@@ -490,12 +490,15 @@ str str_next_word(StrWords* it) {
 
 list_def(char, String)
 
-str String_to_str(String sb) {
+// THIS SHOULD'T BE DONE!!!
+// String can reallocate, so if a reference is taken earlier, it will be invalidated.
+str String_to_tmp_str(String sb) {
   return (str) {
     .len = sb.len,
     .data = sb.data,
   };
 }
+#define SBV(sb) String_to_tmp_str(sb)
 
 // str String_to_owned_str(String* sb) {
 //   char* s = malloc(sb->len);
@@ -533,6 +536,8 @@ String String_from_cstr(const char* s) {
   return sb;
 }
 
+#define SB(cstr) String_from_cstr((cstr)) 
+
 String cstr_heap_to_String(char* *const s) {
   return array_heap_to_String(s, strlen(*s));
 }
@@ -541,11 +546,8 @@ String String_from_str(str s) {
   return String_from_array(s.data, s.len);
 }
 
-#define SB(cstr) String_from_cstr((cstr))
-#define SBV(sb) String_to_str((sb))
-
 char* String_to_cstr(String sb) {
-  return str_to_cstr(String_to_str(sb));
+  return str_to_cstr(String_to_tmp_str(sb));
 }
 
 // TODO: this is not thread safe retard

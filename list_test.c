@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "stc_list.h"
+#include "stc_str.h"
 
 struct Dummy {
   int a, b;
@@ -92,5 +93,25 @@ int main() {
   IntList_sort(&r, int_cmp);
   listfor(int, i, &r) {
     printf("%d\n", r.data[i]);
+  }
+
+  int buf[] = {3, 2, 1, 0};
+  IntList perm = IntList_from_array(buf, sizeof(buf)/ sizeof(int));
+  String sb = {0};
+  String tmp = {0};
+
+  str separator = str_from_cstr_unchecked(", ", 2);
+
+  rangefor(int, i, 0, 100) {
+    listforeach(int, n, &perm) {
+      String_append(&sb, int_to_str(&tmp, *n));
+      String_append_str(&sb, separator);
+    }
+
+    String_append_null(&sb);
+    printf("%s\n", sb.data);
+
+    IntList_next_perm(&perm);
+    sb.len = 0;
   }
 }

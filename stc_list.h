@@ -17,12 +17,7 @@
 // TODO: bitflags?
 // TODO: bitfields?
 // TODO: not sure if i want insert and remove
-// TODO: not sure about returning pointers for first() and last(). What if list gets reallocated?
-// TODO: seriously consider a slice type
-// TODO: array_heap_to_list() is extremely dangerous, heres why we need slices
-// TODO: chunks and windows iterator
-// TODO: next_perm(), prev_perm()
-
+// TODO: array_heap_to_list() is extremely dangerous
 
 #define list_def(type, name) \
 typedef struct { \
@@ -118,10 +113,11 @@ bool name##_contains(const name* l, type value, name##CmpFn pred) { \
   return name##_find(l, value, pred) != -1; \
 } \
  \
-void name##_reverse(name* l) { \
+name name##_reverse(name* l) { \
   for(int left=0, right=l->len-1; left<right; ++left, --right) { \
     name##_swap(l, left, right); \
   } \
+  return *l; \
 } \
  \
 void name##_append_array(name* l, const type* arr, size_t arr_len) { \
@@ -236,5 +232,69 @@ size_t name##_bsearch(name* l, type val, name##CmpFn pred) { \
 } \
 
 list_def(int, IntList)
+
+IntList IntList_next_perm(IntList* l) {
+  int i;
+
+  // find pivot
+  for(i=l->len-2; i >= 0 && l->data[i] >= l->data[i+1]; --i);
+
+  // no pivot, reverse list (this is the last perm)
+  if (i == -1) return IntList_reverse(l);
+
+  int pivot = l->data[i];
+  // find smallest number right to pivot
+  int j;
+  for(j=l->len-1; j > i && l->data[j] <= pivot; --j);
+  IntList_swap(l, i, j);
+
+  for(int left=i+1, right=l->len-1; left<right; ++left, --right) {
+    IntList_swap(l, left, right);
+  }
+
+  return *l;
+}
+
+typedef struct {
+  size_t start, len;
+} IntSlice;
+
+typedef struct {
+  const IntList* src;
+  const size_t size;
+  size_t curr;
+} ChunksIter;
+
+ChunksIter list_chunks(const IntList* l, size_t size) {
+  return (ChunksIter) { l, size, 0 };
+}
+bool list_has_chunk(const ChunksIter* it) {
+  return it->curr < it->src->len;
+}
+IntSlice list_next_chunk(ChunksIter* it) {
+  size_t start = it->curr;
+  size_t len = start + it->size;
+  it->curr += it->size;
+  return (IntSlice) { start, len };
+}
+
+typedef struct {
+  const IntList* src;
+  const size_t size;
+  size_t curr;
+} WindowsIter;
+
+WindowsIter list_windows(const IntList* l, size_t size) {
+  return (WindowsIter) { l, size, 0 };
+}
+bool list_has_window(const WindowsIter* it) {
+  return it->curr + it->size < it->src->len;
+}
+IntSlice list_next_window(WindowsIter* it) {
+  size_t start = it->curr;
+  size_t len = start + it->size;
+  it->curr += 1;
+  return (IntSlice) { start, len };
+}
 
 #endif
