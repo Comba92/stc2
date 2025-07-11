@@ -24,8 +24,6 @@
   #define PATH_MAX_LEN MAX_PATH
 #endif
 
-// TODO: fs_copy, fs_move, fs_delete ?? 
-// TODO: create, copy and move check/versions if exists both for file and dir
 // TODO: fseek/ftell on aren't handling files bigger than 4gigs
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
 
@@ -703,8 +701,6 @@ bool dir_create_recursive(const char* path) {
     printf("\tComponent: " str_fmt "\n", str_arg(*component));
   }
 
-  // TODO: skip ./ folder
-
   fs_tmp_sb1.len = 0;
   String_append_str(&fs_tmp_sb1, path_prefix(path));
 
@@ -953,6 +949,28 @@ bool dir_delete_recursive(const char* path) {
   fs_tmp_sb1.len = 0;
   String_append_cstr(&fs_tmp_sb1, path);
   return dir_delete_recursive_internal(&fs_tmp_sb1);
+}
+
+bool fs_copy(const char* src, const char* dst, bool overwrite) {
+  FileType type = file_type(src);
+  switch(type) {
+    FileType_File: return file_copy(src, dst, overwrite);
+    FileType_Dir: return dir_copy_recursive(src, dst, overwrite);
+    default: return false;
+  }
+}
+
+bool fs_move(const char* src, const char* dst, bool overwrite) {
+  return file_move(src, dst, overwrite);
+}
+
+bool fs_delete(const char* path) {
+  FileType type = file_type(path);
+  switch (type) {
+    FileType_File: return file_delete(path);
+    FileType_Dir: return dir_delete_recursive(path);
+    default: return false;
+  }
 }
 
 #endif
