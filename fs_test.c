@@ -96,9 +96,12 @@ int main() {
   file_create_recursive("./fs_test/test6/kysfag/hahahah/test", false);
 
   printf("\nRecursive copies and dels\n");
-  dir_copy_recursive("./fs_test/test5", "./test_copy");
-  dir_copy_recursive("./fs_test/test6", "./test_copy_del");
+  dir_copy_recursive("./fs_test/test5", "./test_copy", false);
+  dir_copy_recursive("./fs_test/test6", "./test_copy_del", false);
+
   printf("test6 dir copied\n");
+  printf("Delete rec: %d\n", dir_delete_recursive("./test_copy"));
+  dir_copy_recursive("./test_copy_del/", "./fs_test/test_copy_del", false);
   printf("Delete rec: %d\n", dir_delete_recursive("./test_copy_del"));
-  dir_copy_recursive("./test_copy", "./test_copy_del");
+
 }

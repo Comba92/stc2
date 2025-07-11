@@ -847,13 +847,8 @@ bool file_delete(const char* src) {
   return res;
 }
 
-// TODO: consider doing this with tmp_bf
-static bool dir_copy_recursive_internal(String* sb_src, String* sb_dst) {
-  if (!dir_create_recursive(sb_dst->data)) {
-    return false;
-  }
-
-  DirIter it = dir_open(sb_src->data);
+static bool dir_copy_recursive_internal(String* src_sb, String* dst_sb, bool overwrite) {
+  DirIter it = dir_open(src_sb->data);
   if (it.finished) return false;
 
   /*
@@ -864,40 +859,41 @@ static bool dir_copy_recursive_internal(String* sb_src, String* sb_dst) {
     This means we don't need to collect the entries!
   */
 
-  // String sb_src = String_from_cstr(src);
-  // String sb_dst = String_from_cstr(dst);
-
   bool had_error = false;
   for(DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
-    path_push(sb_src, entry->name);
-    path_push(sb_dst, entry->name);
+    path_push(src_sb, entry->name);
+    path_push(dst_sb, entry->name);
 
     switch (entry->type) {
       case FileType_File: {
-        had_error |= !file_copy(sb_src->data, sb_dst->data, true);
+        had_error |= !file_copy(src_sb->data, dst_sb->data, overwrite);
       } break;
+
       case FileType_Dir: {
-        had_error |= !dir_create(sb_dst->data);
-        had_error |= !dir_copy_recursive_internal(sb_src, sb_dst);
+        had_error |= !dir_create(dst_sb->data);
+        had_error |= !dir_copy_recursive_internal(src_sb, dst_sb, overwrite);
       } break;
 
       default: break;
     }
 
-    path_pop(sb_src);
-    path_pop(sb_dst);
+    path_pop(src_sb);
+    path_pop(dst_sb);
   }
 
   return !had_error;
 }
 
-// TODO: fix
-bool dir_copy_recursive(const char* src, const char* dst) {
+bool dir_copy_recursive(const char* src, const char* dst, bool overwrite) {
+  // be sure dst exists
+  dir_create_recursive(dst);
+
   fs_tmp_sb1.len = 0;
   String_append_cstr(&fs_tmp_sb1, src);
   fs_tmp_sb2.len = 0;
   String_append_cstr(&fs_tmp_sb2, dst);
-  return dir_copy_recursive_internal(&fs_tmp_sb1, &fs_tmp_sb2);
+
+  return dir_copy_recursive_internal(&fs_tmp_sb1, &fs_tmp_sb2, overwrite);
 }
 
 bool dir_move(const char* src, const char* dst, bool overwrite) {
@@ -921,38 +917,42 @@ bool dir_delete(const char* path) {
   return res;
 }
 
-bool dir_delete_recursive(const char* path) { 
-  if (path_is_absolute(path)) {
-    fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE DIRECTORY, ABORTING\n");
-    return false;
-  }
-
-  DirIter it = dir_open(path);
+static bool dir_delete_recursive_internal(String* path_sb) { 
+  DirIter it = dir_open(path_sb->data);
   if (it.finished) return false;
-
-  String sb = String_from_cstr(path);
 
   bool had_error = false;
   for(DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
-    path_push(&sb, entry->name);
+    path_push(path_sb, entry->name);
 
     switch (entry->type) {
       case FileType_File: {
-        had_error |= !file_delete(sb.data);
+        had_error |= !file_delete(path_sb->data);
       } break;
       case FileType_Dir: {
-        had_error |= !dir_delete_recursive(sb.data);
-        had_error |= !dir_delete(sb.data);
+        had_error |= !dir_delete_recursive_internal(path_sb);
+        had_error |= !dir_delete(path_sb->data);
       } break;
 
       default: break;
     }
 
-    path_pop(&sb);
+    path_pop(path_sb);
   }
 
-  had_error |= !dir_delete(path);
+  had_error |= !dir_delete(path_sb->data);
   return !had_error;
+}
+
+bool dir_delete_recursive(const char* path) {
+  if (path_is_absolute(path)) {
+    fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE DIRECTORY, ABORTING\n");
+    return false;
+  }
+
+  fs_tmp_sb1.len = 0;
+  String_append_cstr(&fs_tmp_sb1, path);
+  return dir_delete_recursive_internal(&fs_tmp_sb1);
 }
 
 #endif
