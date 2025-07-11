@@ -513,6 +513,8 @@ void String_append_null(String* sb) {
   // string builder as a cstr. 
   // Any other append will overwrite the null,
   // so it has to be appended again
+  
+  String_reserve(sb, sb->len+1);
   sb->data[sb->len] = '\0';
 }
 
@@ -531,7 +533,7 @@ String String_from_cstr(const char* s) {
   return sb;
 }
 
-String cstr_heap_to_String(char** s) {
+String cstr_heap_to_String(char* *const s) {
   return array_heap_to_String(s, strlen(*s));
 }
 

@@ -136,7 +136,7 @@ name name##_from_array(const type* arr, size_t arr_len) { \
   return res; \
 } \
  \
-name array_heap_to_##name(type** arr, size_t arr_len) { \
+name array_heap_to_##name(type* *const arr, size_t arr_len) { \
   name res = {0}; \
   res.len = arr_len; \
   /* trick: if we set cap to 0, next time we push, will be reallocated accordingly to len */ \

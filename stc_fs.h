@@ -26,9 +26,12 @@
 
 // TODO: fs_copy, fs_move, fs_delete ?? 
 // TODO: create, copy and move check/versions if exists both for file and dir
+// TODO: fseek/ftell on aren't handling files bigger than 4gigs
+// TODO: maybe returning bools is not a great idea, returning 0 on success might be better
 
-// TODO: this is not thread safe retard
-static String fs_tmp_sb = {0};
+// TODO: this is not thread safe
+static String fs_tmp_sb1 = {0};
+static String fs_tmp_sb2 = {0};
 
 int fs_err_code() {
 #ifndef _WIN32
@@ -102,10 +105,11 @@ bool file_close(FILE* f) {
 // TODO: consider memory mapped file reading?
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
-char* file_read_to_string(const char* path) {
+
+bool file_read_to_string(String* sb, const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) {
-    return NULL;
+    return false;
   }
 
   if (fseek(f, 0, SEEK_END) != 0) {
@@ -113,7 +117,7 @@ char* file_read_to_string(const char* path) {
     fs_err_print(path);
     #endif
     file_close(f);
-    return NULL;
+    return false;
   }
 
   size_t file_size = ftell(f);
@@ -122,7 +126,7 @@ char* file_read_to_string(const char* path) {
     fs_err_print(path);
     #endif
     file_close(f);
-    return NULL;
+    return false;
   }
 
   if (fseek(f, 0, SEEK_SET) != 0) {
@@ -130,11 +134,12 @@ char* file_read_to_string(const char* path) {
     fs_err_print(path);
     #endif
     file_close(f);
-    return NULL;
+    return false;
   }
 
-  char* buf = malloc(file_size);
-  size_t read = fread(buf, 1, file_size, f);
+  String_reserve(sb, file_size);
+  size_t read = fread(sb->data, 1, file_size, f);
+  sb->len = read;
 
   #ifdef STC_LOG_ERR
   if (read != file_size) {
@@ -143,7 +148,7 @@ char* file_read_to_string(const char* path) {
   #endif
 
   file_close(f);
-  return buf;
+  return read == file_size;
 }
 
 bool file_write_bytes(const char* path, const char* data, size_t len) {
@@ -162,9 +167,13 @@ bool file_write_bytes(const char* path, const char* data, size_t len) {
 
 /////////////////////
 
-// TODO: consider making path a sperate type
+// TODO: maybe path should be its own type
+// passing char* will lose length information,
+// and will do unnecessary str_from_cstr() to scan for null
+
 // https://doc.rust-lang.org/std/path/struct.Path.html
 
+// this is doing unnecessary str_from_cstr()
 char* path_last_component(const char* path) {
   char* unix_path = strrchr(path, '/');
   char* wind_path = strrchr(path, '\\');
@@ -196,36 +205,45 @@ str path_parent(const char* path) {
   return str_from_cstr_unchecked(path, parent_start - path);
 }
 
-// TODO: Should this return NULL on error?
-// TODO: consider using dir_current() and concat the relative path
-// TODO: this only works if path is a correct relative path; no check are done to see if absolute path is valid
-char* path_to_absolute(const char* path) {
+// this only works if path is a correct relative path; no check are done to see if absolute path is valid
+char* path_to_absolute(String* sb, const char* path) {
+  sb->len = 0;
 #ifndef _WIN32
+  String_reserve(sb, PATH_MAX_LEN);
+
   // https://man7.org/linux/man-pages/man3/realpath.3.html
-  char* res = realpath(path, NULL);
-  #ifdef STC_LOG_ERR
-  if (res == NULL) fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
-  #endif
-  return res;
+  char* res = realpath(path, sb->data);
+  if (res == NULL) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
+    #endif
+    return sb->data;
+  }
+
+  sb->len = strlen(sb->data);
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
-  DWORD path_size = GetFullPathName(path, 0, NULL, NULL);
-  if (path_size == 0) {
+  DWORD path_len = GetFullPathName(path, 0, NULL, NULL);
+  if (path_len == 0) {
     #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp( "Failed to get absolute path length for relative path %s", path));
+    fs_err_print(str_fmt_tmp("Failed to get absolute path length for relative path %s", path));
     #endif
-    return NULL;
+    return sb->data;
   }
-  char* buf = malloc(path_size);
-  DWORD res = GetFullPathName(path, path_size, buf, NULL);
+
+  String_reserve(sb, path_len);
+  DWORD res = GetFullPathName(path, path_len, sb->data, NULL);
   if (res == 0) {
     #ifdef STC_LOG_ERR
     fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
     #endif
-    return NULL;
+    return sb->data;
   }
-  return buf;
+
+  /* If the lpBuffer buffer is too small to contain the path, the return value is the size, in TCHARs, of the buffer that is required to hold the path and the terminating null character. */
+  sb->len = path_len-1;
 #endif
+  return sb->data;
 }
 
 str path_prefix(const char* path) {
@@ -233,7 +251,7 @@ str path_prefix(const char* path) {
   else if (c_is_alpha(path[0]) && path[1] == ':' && path[2] == '\\') {
     return str_from_cstr_unchecked(path, 3);
   }
-  // TODO: windows other weird prefixes aren't supported
+  // TODO: windows' other weird prefixes aren't supported
 
   return STR_EMPTY;
 }
@@ -251,10 +269,20 @@ bool path_is_relative(const char* path) {
   return !path_is_absolute(path);
 }
 
-// TODO: might be an iterator
 bool c_is_separator(char c) { return c == '/' || c == '\\'; }
 StrList path_components(const char* path) {
   return str_split_when_collect(str_from_cstr(path), c_is_separator);
+}
+
+typedef StrSplitWhen PathComponents ;
+PathComponents path_components_iter(const char* path) {
+  return str_split_when(str_from_cstr(path), c_is_separator);
+}
+bool path_has_component(const PathComponents* it) {
+  return str_has_split_when(it);
+}
+str path_next_component(PathComponents* it) {
+  return str_next_split_when(it);
 }
 
 // https://doc.rust-lang.org/std/path/struct.PathBuf.html
@@ -263,15 +291,18 @@ void path_push(String* sb, const char* path) {
   if (path_is_absolute(path)) sb->len = 0;
   else if (*String_last(*sb) != '/' && path[0] != '/') String_push(sb, '/');
   String_append_cstr(sb, path);
-  String_append_null(sb);
 }
 
 bool path_pop(String* sb) {
   // we append null so we can use path_last_component
   String_append_null(sb);
   char* last_component_start = path_last_component(sb->data);
+
   if (last_component_start == NULL) return false;
   sb->len = last_component_start - sb->data;
+  // append null again, to truncate the string
+  String_append_null(sb);
+
   return true;
 }
 
@@ -294,6 +325,66 @@ bool path_set_extension(String* sb, const char* extension) {
   if (!has_dot) String_push(sb, '.');
   String_append_cstr(sb, extension);
   return true;
+}
+
+
+char* dir_current(String* sb) {
+#ifndef _WIN32
+  sb->len = 0;
+  // PATH_MAX_LEN is usally smaller in Linux, 4096
+  String_reserve(sb, PATH_MAX_LEN+1);
+
+  // https://man7.org/linux/man-pages/man3/getcwd.3.html
+  char* res = getcwd(sb->data, PATH_MAX_LEN);
+  if (res == NULL) { 
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get working directory"));
+    #endif
+    String_append_cstr(sb, "");
+    return sb->data;
+  }
+
+  sb->len = strlen(sb->data);
+#else
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getcurrentdirectory
+  size_t path_len = GetCurrentDirectory(0, NULL);
+
+  if (path_len == 0) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get working directory"));
+    #endif
+    return sb->data;
+  }
+  
+  sb->len = 0;
+  String_reserve(sb, path_len);
+  if (GetCurrentDirectory(path_len, sb->data) == 0) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(str_fmt_tmp("Failed to get working directory"));
+    #endif
+    String_append_cstr(sb, "");
+    return sb->data;
+  }
+
+  /* 
+    If the buffer that is pointed to by lpBuffer is not large enough, the return value specifies the required size of the buffer, in characters, including the null-terminating character.
+  */
+  sb->len = path_len-1;
+#endif
+  return sb->data;
+}
+
+bool dir_set_current(const char* path) {
+#ifndef _WIN32
+  bool res = chdir(path) == 0;
+#else
+  bool res = SetCurrentDirectory(path) != 0;
+#endif
+
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(str_fmt_tmp("Failed to set working directory"));
+  #endif
+  return res;
 }
 
 /////////////////////
@@ -320,10 +411,14 @@ typedef struct {
   HANDLE h;
 #endif
   bool finished;
+  size_t err_count;
   DirEntry curr;
 } DirIter;
 
-// TODO: should precompute at least first element?
+bool dir_scanning(const DirIter* it) {
+  return !it->finished;
+}
+
 DirIter dir_open(const char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
@@ -344,7 +439,7 @@ DirIter dir_open(const char* dirpath) {
   #endif
 
   bool had_error = dir_fd == -1 || dir == NULL;
-  DirIter it = { dir_fd, dir, had_error };
+  DirIter it = { dir_fd, dir, had_error, had_error ? 1 : 0 };
 #else
   char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
@@ -364,7 +459,7 @@ DirIter dir_open(const char* dirpath) {
   #endif
 
   bool had_error = h == INVALID_HANDLE_VALUE;
-  DirIter it = { data, h, had_error };
+  DirIter it = { data, h, had_error, had_error ? 1 : 0 };
 #endif
   return it;
 }
@@ -385,13 +480,7 @@ bool dir_close(DirIter* it) {
   return res;
 }
 
-bool dir_scanning(const DirIter* it) {
-  return !it->finished;
-}
 
-// TODO: there are currently no way to get an error bool out of this
-// when an error occurs, the iterator simply stops
-// TODO: on error/end, should return NULL or empty struct?
 DirEntry* dir_read(DirIter* it) {
 #ifndef _WIN32
   int prev_err = errno;
@@ -401,6 +490,7 @@ DirEntry* dir_read(DirIter* it) {
   // readdir until a valid file is returned
   bool is_special_entry = false;
   do {
+    // https://man7.org/linux/man-pages/man3/readdir.3.html
     dp = readdir(it->dir);
 
     // no more files left (or some other error)
@@ -425,6 +515,7 @@ DirEntry* dir_read(DirIter* it) {
       fs_err_print(str_fmt_tmp(filename));
     #endif
 
+    it->err_count += 1;
     it->curr.name = "";
     it->curr.type = FileType_Other;
     return &it->curr;
@@ -477,7 +568,7 @@ DirEntry* dir_read(DirIter* it) {
   return &it->curr;
 }
 
-#define dir_iter(ent, it) for(DirEntry* ent; (ent = dir_read(it)) != NULL;)
+#define dir_iter(ent, it) for(DirEntry* ent; (ent = dir_read((it))) != NULL;)
 
 list_def(DirEntry, DirEntries)
 void DirEntries_drop(DirEntries* entries) {
@@ -486,7 +577,6 @@ void DirEntries_drop(DirEntries* entries) {
   free(entries->data);
 }
 
-// TODO: what if any function fails? Consider passing DirEntries as pointer and returning success as bool
 DirEntries dir_entries(const char* dirpath) {
   DirEntries entries = {0};
   DirIter it = dir_open(dirpath);
@@ -510,107 +600,6 @@ DirEntries dir_entries_sorted(const char* dirpath) {
   return entries;
 }
 
-// DirEntries dir_read_collect(const char* dirpath) {
-//   DirEntries entries = {0};
-//   DirEntry entry = {0};
-
-// #ifndef _WIN32
-//   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
-//   DIR* d = fdopendir(dir_fd);
-
-//   if (d == NULL) {
-//     #ifdef STC_LOG_ERR
-//     fs_err_print(dirpath);
-//     #endif
-//     return entries;
-//   }
-  
-//   struct dirent* dp;
-//   struct stat statbuf;
-
-//   int prev_err = errno;
-//   // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
-//   // https://man7.org/linux/man-pages/man3/readdir.3p.html
-//   while ((dp = readdir(d)) != NULL) {
-//     char* filename = dp->d_name;
-//     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
-
-//     int fd = openat(dir_fd, filename, O_RDONLY);
-//     if (fstat(fd, &statbuf) != 0) {
-//       #ifdef STC_LOG_ERR
-//         fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-//       #endif
-//       continue;
-//     }
-
-//     entry.name = dp->d_name;
-//     switch (statbuf.st_mode & S_IFMT) {
-//       case S_IFREG: entry.type = FileType_File; break;
-//       case S_IFDIR: entry.type = FileType_Dir; break;
-//       case S_IFLNK: entry.type = FileType_Link; break;
-//       default: entry.type = FileType_Other; break;
-//     }
-
-//     DirEntries_push(&entries, entry);
-//     if (close(fd) != 0) {
-//       #ifdef STC_LOG_ERR
-//       fs_err_print(entry.name);
-//       #endif
-//       continue;
-//     };
-//   }
-
-//     #ifdef STC_LOG_ERR
-//     if (prev_err != errno) fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-//     #endif
-
-//     if (closedir(d) != 0) {
-//       #ifdef STC_LOG_ERR
-//       fs_err_print(str_fmt_tmp("Dir descriptor %d", dir_fd));
-//       #endif
-//     };
-// #else
-//   char buf[PATH_MAX_LEN];
-//   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
-
-//   // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
-//   WIN32_FIND_DATA data;
-//   HANDLE h = FindFirstFile(buf, &data);
-//   if (h == INVALID_HANDLE_VALUE) {
-//     #ifdef STC_LOG_ERR
-//     fs_err_print(dirpath);
-//     #endif
-//     return entries;
-//   }
-
-//   do {
-//     char* filename = data.cFileName;
-//     if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) continue;
-
-//     entry.name = strdup(filename);
-//     switch (data.dwFileAttributes) {
-//       case FILE_ATTRIBUTE_DIRECTORY: entry.type = FileType_Dir; break;
-//       default: entry.type = FileType_File; break;
-//     }
-
-//     DirEntries_push(&entries, entry);
-//   } while(FindNextFile(h, &data) != 0);
-  
-//   if (GetLastError() != ERROR_NO_MORE_FILES) {
-//     #ifdef STC_LOG_ERR
-//     fs_err_print(str_fmt_tmp("Dir handle %p", h));
-//     #endif
-//   }
-
-//   if (FindClose(h) == 0) {
-//     #ifdef STC_LOG_ERR
-//     fs_err_print(str_fmt_tmp("Dir handle %p", h));
-//     #endif
-//   }
-// #endif
-
-//   return entries;
-// }
 
 /////////////////////
 
@@ -676,6 +665,7 @@ FileType file_type(const char* path) {
 #endif
 }
 
+// TODO: handle big sizes on linux
 size_t file_size(const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) return 0;
@@ -692,67 +682,9 @@ size_t file_size(const char* path) {
   else return res;
 }
 
-// TODO: this is not thread safe retard
-static char cwd[PATH_MAX_LEN];
-char* dir_current() {
-#ifndef _WIN32
-  char* res = getcwd(cwd, PATH_MAX_LEN);
-  #ifdef STC_LOG_ERR
-  if (res == NULL) fs_err_print(str_fmt_tmp("Failed to get working directory"));
-  #endif
-  return res;
-#else
-  if (GetCurrentDirectory(PATH_MAX_LEN, cwd) == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get working directory"));
-    #endif
-  }
-  return cwd;
-#endif
-}
-
-bool dir_set_current(const char* path) {
-#ifndef _WIN32
-  bool res = chdir(path) == 0;
-#else
-  bool res = SetCurrentDirectory(path) != 0;
-#endif
-
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Failed to set working directory"));
-  #endif
-  return res;
-}
-
-bool file_delete(const char* src) {
-  int res = remove(src) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-  return res;
-}
-
-
-bool file_move(const char* src, const char* dst) {
-#ifndef _WIN32
-  int res = rename(src, dst) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-#else
-  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefile
-  bool res = MoveFileEx(src, dst, MOVEFILE_REPLACE_EXISTING) != 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
-  return res;
-#endif
-}
-
 bool dir_create(const char* path) {
-  if (dir_exists(path)) return true;
-  
 #ifndef _WIN32
+  // https://man7.org/linux/man-pages/man2/mkdir.2.html
   bool res = mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO) == 0;
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createdirectorya?redirectedfrom=MSDN
@@ -766,46 +698,29 @@ bool dir_create(const char* path) {
 }
 
 bool dir_create_recursive(const char* path) {
-  fs_tmp_sb.len = 0;
   StrList components = path_components(path);
+  listforeach(str, component, &components) {
+    printf("\tComponent: " str_fmt "\n", str_arg(*component));
+  }
 
-  String_append_str(&fs_tmp_sb, path_prefix(path));
+  // TODO: skip ./ folder
+
+  fs_tmp_sb1.len = 0;
+  String_append_str(&fs_tmp_sb1, path_prefix(path));
 
   bool had_error = false;
   listforeach(str, component, &components) {
-    String_append_str(&fs_tmp_sb, *component);
-    String_push(&fs_tmp_sb, '/');
-    String_append_null(&fs_tmp_sb);
+    had_error = false;
+    String_append_str(&fs_tmp_sb1, *component);
+    String_push(&fs_tmp_sb1, '/');
+    String_append_null(&fs_tmp_sb1);
     
-    if (!dir_create(fs_tmp_sb.data)) {
-      had_error = true;
-      break;
-    }
+    printf("\tCreating %s\n", fs_tmp_sb1.data);
+    if (!dir_create(fs_tmp_sb1.data)) had_error = true;
   }
 
   StrList_free(&components);
   return !had_error;
-}
-
-bool dir_move(const char* src, const char* dst) {
-  return file_move(src, dst);
-}
-
-bool dir_delete(const char* path) {
-  if (!dir_exists(path)) return true;
-  
-#ifndef _WIN32
-  bool res = rmdir(path) == 0;
-#else
-  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-removedirectorya
-  bool res = RemoveDirectory(path) != 0;
-#endif
-
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(path);
-  #endif
-
-  return res;
 }
 
 bool file_create(const char* path, bool overwrite) {
@@ -814,13 +729,8 @@ bool file_create(const char* path, bool overwrite) {
   // https://man7.org/linux/man-pages/man2/open.2.html
   int fd = open(path, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
   // int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
-  if (fd == -1) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
-    return false;
-  }
-  if (close(fd) != 0) {
+
+  if (fd == -1 || close(fd) != 0) {
     #ifdef STC_LOG_ERR
     fs_err_print(path);
     #endif
@@ -830,13 +740,8 @@ bool file_create(const char* path, bool overwrite) {
   // https://learn.microsoft.com/it-it/windows/win32/api/fileapi/nf-fileapi-createfilea
   DWORD flags = overwrite ? CREATE_ALWAYS : CREATE_NEW;
   HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, flags, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (h == INVALID_HANDLE_VALUE) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
-    return false;
-  }
-  if (CloseHandle(h) == 0) {
+
+  if (h == INVALID_HANDLE_VALUE || CloseHandle(h) == 0) {
     #ifdef STC_LOG_ERR
     fs_err_print(path);
     #endif
@@ -849,35 +754,18 @@ bool file_create(const char* path, bool overwrite) {
 
 bool file_create_recursive(const char* path, bool overwrite) {
   str parent = path_parent(path);
-  fs_tmp_sb.len = 0;
-  String_append_str(&fs_tmp_sb, parent);
-  String_append_null(&fs_tmp_sb);
+  // use fs_tmp_sb2 here, as dir_create_recursive() uses fs_tmp_sb1
+  fs_tmp_sb2.len = 0;
+  String_append_str(&fs_tmp_sb2, parent);
+  String_append_null(&fs_tmp_sb2);
 
-  return dir_create_recursive(fs_tmp_sb.data) 
+  return dir_create_recursive(fs_tmp_sb2.data)
     && file_create(path, overwrite);
 }
-
 
 bool file_copy(const char* src, const char* dst, bool overwrite) {
 #ifndef _WIN32
   int src_fd = open(src, O_RDONLY, 0);
-
-  if (src_fd == -1) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(src);
-    #endif
-    return false;
-  }
-
-  int flags = overwrite ? O_TRUNC : 0;
-  int dst_fd = open(dst, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
-
-  if (dst_fd == -1) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(dst);
-    #endif
-    return false;
-  }
 
   struct stat statbuf;
   if (fstat(src_fd, &statbuf) != 0) {
@@ -888,9 +776,12 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
   }
   size_t src_size = statbuf.st_size;
 
-  // both copy_file_range abd sendfile are not always avaible on unix
+  int flags = overwrite ? O_TRUNC : 0;
+  int dst_fd = open(dst, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
+
+  // TODO: both copy_file_range and sendfile are not always avaible on unix
   // might want to fallback to fread and fwrite
-  // TODO: macos has flconefileat and fcopyfile
+  // macOS has flconefileat and fcopyfile
 
   // https://man7.org/linux/man-pages/man2/copy_file_range.2.html
   // https://man7.org/linux/man-pages/man2/sendfile.2.html
@@ -928,12 +819,41 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
 #endif
 }
 
-bool dir_copy_recursive(const char* src, const char* dst) {
-  if (!dir_create_recursive(dst)) {
+bool file_move(const char* src, const char* dst, bool overwrite) {
+#ifndef _WIN32
+  if (!overwrite && path_exists(dst)) return false;
+
+  int res = rename(src, dst) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+#else
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefile
+  // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa
+  DWORD flags = overwrite ? MOVEFILE_REPLACE_EXISTING : 0;
+  bool res = MoveFileEx(src, dst, MOVEFILE_COPY_ALLOWED | flags) != 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+  return res;
+#endif
+}
+
+bool file_delete(const char* src) {
+  int res = remove(src) == 0;
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(src);
+  #endif
+  return res;
+}
+
+// TODO: consider doing this with tmp_bf
+static bool dir_copy_recursive_internal(String* sb_src, String* sb_dst) {
+  if (!dir_create_recursive(sb_dst->data)) {
     return false;
   }
 
-  DirIter it = dir_open(src);
+  DirIter it = dir_open(sb_src->data);
   if (it.finished) return false;
 
   /*
@@ -944,33 +864,62 @@ bool dir_copy_recursive(const char* src, const char* dst) {
     This means we don't need to collect the entries!
   */
 
-  String sb_src = String_from_cstr(src);
-  String sb_dst = String_from_cstr(dst);
+  // String sb_src = String_from_cstr(src);
+  // String sb_dst = String_from_cstr(dst);
 
   bool had_error = false;
   for(DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
-    path_push(&sb_src, entry->name);
-    path_push(&sb_dst, entry->name);
+    path_push(sb_src, entry->name);
+    path_push(sb_dst, entry->name);
 
     switch (entry->type) {
       case FileType_File: {
-        had_error |= !file_copy(sb_src.data, sb_dst.data, true);
+        had_error |= !file_copy(sb_src->data, sb_dst->data, true);
       } break;
       case FileType_Dir: {
-        had_error |= !dir_create(sb_dst.data);
-        had_error |= !dir_copy_recursive(sb_src.data, sb_dst.data);
+        had_error |= !dir_create(sb_dst->data);
+        had_error |= !dir_copy_recursive_internal(sb_src, sb_dst);
       } break;
 
       default: break;
     }
 
-    path_pop(&sb_src);
-    path_pop(&sb_dst);
+    path_pop(sb_src);
+    path_pop(sb_dst);
   }
 
   return !had_error;
 }
 
+// TODO: fix
+bool dir_copy_recursive(const char* src, const char* dst) {
+  fs_tmp_sb1.len = 0;
+  String_append_cstr(&fs_tmp_sb1, src);
+  fs_tmp_sb2.len = 0;
+  String_append_cstr(&fs_tmp_sb2, dst);
+  return dir_copy_recursive_internal(&fs_tmp_sb1, &fs_tmp_sb2);
+}
+
+bool dir_move(const char* src, const char* dst, bool overwrite) {
+  return file_move(src, dst, overwrite);
+}
+
+bool dir_delete(const char* path) {
+  if (!dir_exists(path)) return true;
+  
+#ifndef _WIN32
+  bool res = rmdir(path) == 0;
+#else
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-removedirectorya
+  bool res = RemoveDirectory(path) != 0;
+#endif
+
+  #ifdef STC_LOG_ERR
+  if (!res) fs_err_print(path);
+  #endif
+
+  return res;
+}
 
 bool dir_delete_recursive(const char* path) { 
   if (path_is_absolute(path)) {
