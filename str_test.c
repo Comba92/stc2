@@ -165,7 +165,7 @@ int main() {
 
   str_dbg(str_join(&ls, SV(", "), sl));
 
-  String_fmt(&ls, "Kys %d times stupid faggot %s", 100, "killer");
+  String_append_fmt(&ls, "Kys %d times stupid faggot %s", 100, "killer");
   str_dbg(ls);
   str_dbg(int_to_str(&ls, 20));
   str_dbg(float_to_str(&ls, 20.23));
@@ -191,7 +191,7 @@ int main() {
   String fmt = SB("Welcome back my friend to the show that never ends!");
   printf("Fmt contents: %s\n", fmt.data);
   printf("Test: %s\n", &fmt.data);
-  String_fmt(&fmt, "Overwriting the text with fmt... %s", fmt.data);
+  String_append_fmt(&fmt, "Overwriting the text with fmt... %s", fmt.data);
   str_dbg(fmt);
 
   printf("Done\n");

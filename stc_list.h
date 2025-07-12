@@ -19,6 +19,8 @@ static const int LIST_DEFAULT_CAP = 16;
 // TODO: bitfields?
 // TODO: not sure if i want insert and remove
 // TODO: array_heap_to_list() is extremely dangerous
+// TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
+// TODO: list_repeat() and list_fill()
 
 #define list_def(type, name) \
 typedef struct { \

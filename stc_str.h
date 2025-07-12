@@ -538,7 +538,7 @@ String String_from_cstr(const char* s) {
 
 #define SB(cstr) String_from_cstr((cstr)) 
 
-String cstr_heap_to_String(char* *const s) {
+String cstr_heap_to_String(char** s) {
   return array_heap_to_String(s, strlen(*s));
 }
 
@@ -550,9 +550,10 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_tmp_str(sb));
 }
 
-// TODO: this is not thread safe retard
+static const size_t TMP_DEFAULT_LEN = 1024;
 static __thread String tmp_sb = {0};
 
+// https://nullprogram.com/blog/2023/02/13/
 char* str_fmt_tmp(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
@@ -565,14 +566,14 @@ char* str_fmt_tmp(const char* fmt, ...) {
   va_start(args, fmt);
   // should write_real_size + null
   // be sure to set tmp_sb.len!
-  tmp_sb.len = vsnprintf(tmp_sb.data, real_size+1, fmt, args);
+  tmp_sb.len = vsnprintf(tmp_sb.data, real_size, fmt, args);
   va_end(args);
 
   return tmp_sb.data;
 }
 
 // returns itself
-String String_fmt(String* sb, const char* fmt, ...) {
+String String_append_fmt(String* sb, const char* fmt, ...) {
   // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
   // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
 
@@ -587,25 +588,25 @@ String String_fmt(String* sb, const char* fmt, ...) {
   va_start(args, fmt);
   // should write_real_size + null
   // be sure to set tmp_sb.len!
-  tmp_sb.len = vsnprintf(tmp_sb.data, real_size+1, fmt, args);
+  tmp_sb.len = vsnprintf(tmp_sb.data, real_size, fmt, args);
   va_end(args);
 
-  sb->len = 0;
-  String_append_cstr(sb, tmp_sb.data);
-
+  String_append(sb, tmp_sb);
   return *sb;
 }
 
-char* readline_stdin(String* sb) {
+// returns itself
+String String_readline_stdin(String* sb) {
   char* res = fgets(sb->data, sb->cap, stdin);
-  if (res == NULL || ferror(stdin) != 0) return "";
-  sb->len = 0;
-  return sb->data;
+  if (res == NULL || ferror(stdin) != 0) sb->len = 0;
+  else sb->len = strlen(sb->data);
+  return *sb;
 }
 
 int str_parse_int(str s) {
   String_reserve(&tmp_sb, s.len+1);
   memcpy(tmp_sb.data, s.data, s.len);
+  tmp_sb.len = s.len+1;
   String_append_null(&tmp_sb);
 
   int n = atoi(tmp_sb.data);
@@ -613,9 +614,9 @@ int str_parse_int(str s) {
 }
 
 double str_parse_float(str s) {
-  tmp_sb.len = 0;
   String_reserve(&tmp_sb, s.len+1);
   memcpy(tmp_sb.data, s.data, s.len);
+  tmp_sb.len = s.len+1;
   String_append_null(&tmp_sb);
 
   double n = atof(tmp_sb.data);
@@ -624,13 +625,14 @@ double str_parse_float(str s) {
 
 // returns itself
 String int_to_str(String* sb, int n) {
-  return String_fmt(sb, "%d", n);
+  sb->len = 0;
+  return String_append_fmt(sb, "%d", n);
 }
-
 
 // returns itself
 String float_to_str(String* sb, double n) {
-  return String_fmt(sb, "%f", n);
+  sb->len = 0;
+  return String_append_fmt(sb, "%f", n);
 }
 
 // TODO: this is possibly dangerous, as the returned string has to be freed. 
