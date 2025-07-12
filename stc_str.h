@@ -561,7 +561,8 @@ char* str_fmt_tmp(const char* fmt, ...) {
   va_end(args);
 
   // real_size excludes null
-  String_reserve(&tmp_sb, real_size+1);
+  real_size += 1;
+  String_reserve(&tmp_sb, real_size);
   
   va_start(args, fmt);
   // should write_real_size + null
@@ -583,7 +584,8 @@ String String_append_fmt(String* sb, const char* fmt, ...) {
   va_end(args);
 
   // real_size excludes null
-  String_reserve(&tmp_sb, real_size+1);
+  real_size += 1;
+  String_reserve(&tmp_sb, real_size);
   
   va_start(args, fmt);
   // should write_real_size + null

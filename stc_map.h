@@ -13,6 +13,9 @@
 
 static const int MAP_DEFAULT_CAP = 16; 
 
+// https://nullprogram.com/blog/2018/07/31/
+// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
+
 // https://theartincode.stanis.me/008-djb2/
 long djb2(const char *s, size_t len)
 {

@@ -140,7 +140,7 @@ int main() {
   String_append_cstr(&ls, " kys faggot");
   str_dbg(ls);
   // ls.len = 0;
-  String_append_str(&ls, str_from_cstr(" kys faggot"));
+  String_append_str(&ls, str_from_cstr(", kys faggot"));
   str_dbg(ls);
   str_dbg(s);
   str_dbg(str_replace(&ls, s, SV("Hello"), SV("Bye")));
@@ -165,6 +165,7 @@ int main() {
 
   str_dbg(str_join(&ls, SV(", "), sl));
 
+  ls.len = 0;
   String_append_fmt(&ls, "Kys %d times stupid faggot %s", 100, "killer");
   str_dbg(ls);
   str_dbg(int_to_str(&ls, 20));
@@ -191,7 +192,7 @@ int main() {
   String fmt = SB("Welcome back my friend to the show that never ends!");
   printf("Fmt contents: %s\n", fmt.data);
   printf("Test: %s\n", &fmt.data);
-  String_append_fmt(&fmt, "Overwriting the text with fmt... %s", fmt.data);
+  String_append_fmt(&fmt, " Overwriting the text with fmt... %s", fmt.data);
   str_dbg(fmt);
 
   printf("Done\n");

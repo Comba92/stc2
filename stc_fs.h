@@ -255,7 +255,11 @@ str path_prefix(const char* path) {
 }
 
 bool path_is_absolute(const char * path) {
+  size_t len = strlen(path);
+
+  if (len < 1) return false;
   bool is_unix_abs = path[0] == '/';
+  if (len < 3) return is_unix_abs;
   bool is_wind_abs = 
   (c_is_alpha(path[0]) && path[1] == ':' && path[2] == '\\')
   || (path[0] == '\\' && path[1] == '\\');
@@ -287,7 +291,7 @@ str path_next_component(PathComponents* it) {
 
 void path_push(String* sb, const char* path) {
   if (path_is_absolute(path)) sb->len = 0;
-  else if (*String_last(*sb) != '/' && path[0] != '/') String_push(sb, '/');
+  else if ((sb->len > 0 && *String_last(*sb) != '/') && path[0] != '/') String_push(sb, '/');
   String_append_cstr(sb, path);
 }
 
@@ -397,6 +401,7 @@ typedef enum {
 
 typedef struct {
   char* name;
+  size_t size;
   FileType type;
 } DirEntry;
 
@@ -515,11 +520,13 @@ DirEntry* dir_read(DirIter* it) {
 
     it->err_count += 1;
     it->curr.name = "";
+    it->curr.size = 0;
     it->curr.type = FileType_Other;
     return &it->curr;
   }
 
   it->curr.name = dp->d_name;
+  it->curr.size = statbuf.st_size;
   switch (statbuf.st_mode & S_IFMT) {
     case S_IFREG: it->curr.type = FileType_File; break;
     case S_IFDIR: it->curr.type = FileType_Dir; break;
@@ -558,6 +565,7 @@ DirEntry* dir_read(DirIter* it) {
 
   // get file data
   it->curr.name = filename;
+  it->curr.size = (((size_t) it->data.nFileSizeHigh) << 32) | it->data.nFileSizeLow;
   switch (it->data.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: it->curr.type = FileType_Dir; break;
     default: it->curr.type = FileType_File; break;
