@@ -12,6 +12,7 @@
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
+static const int LIST_DEFAULT_CAP = 16; 
 
 // TODO: deal with indexes sizes, just fucking use stdint.h
 // TODO: bitflags?
@@ -25,9 +26,26 @@ typedef struct { \
   type* data; \
 } name; \
  \
+name name##_with_cap(size_t cap) { \
+  /* https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2 */ \
+  if ((cap & (cap - 1)) != 0) { \
+    cap--; \
+    cap |= cap >> 1; \
+    cap |= cap >> 2; \
+    cap |= cap >> 4; \
+    cap |= cap >> 8; \
+    cap |= cap >> 16; \
+    cap++; \
+  } \
+ \
+  type* data = malloc(cap * sizeof(type)); \
+  assert(data != NULL && "list realloc failed"); \
+  return (name) { 0, cap, data }; \
+} \
+ \
 void name##_reserve(name* l, size_t new_cap) { \
   if (new_cap > l->cap) { \
-    l->cap = l->cap == 0 ? 16 : l->cap; \
+    l->cap = l->cap == 0 ? LIST_DEFAULT_CAP : l->cap; \
     while (new_cap > l->cap) l->cap *= 2; \
  \
     l->data = realloc(l->data, sizeof(type) * l->cap); \

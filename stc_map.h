@@ -11,6 +11,8 @@
 // TODO: map_get() should return pointer?
 // TODO: arena keys
 
+static const int MAP_DEFAULT_CAP = 16; 
+
 // https://theartincode.stanis.me/008-djb2/
 long djb2(const char *s, size_t len)
 {
@@ -71,11 +73,27 @@ typedef struct { \
 } name##Entry; \
  \
 typedef struct { \
-  size_t cap, len; \
+  size_t len, cap; \
   name##Entry* entries; \
  \
 } name; \
  \
+name name##_with_cap(size_t cap) { \
+  /* https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2 */ \
+  if ((cap & (cap - 1)) != 0) { \
+    cap--; \
+    cap |= cap >> 1; \
+    cap |= cap >> 2; \
+    cap |= cap >> 4; \
+    cap |= cap >> 8; \
+    cap |= cap >> 16; \
+    cap++; \
+  } \
+ \
+  name##Entry* data = malloc(cap * sizeof(name##Entry)); \
+  assert(data != NULL && "list realloc failed"); \
+  return (name) { 0, cap, data }; \
+} \
 name##Entry* name##_search(const name* m, str key) { \
   size_t i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
@@ -95,23 +113,17 @@ bool name##_insert(name*, str, type); \
 void name##_reserve(name* m, size_t new_cap) { \
   if (new_cap > m->cap) { \
     name new_map = {0}; \
-    new_map.cap = m->cap == 0 ? 16 : m->cap; \
+    new_map.cap = m->cap == 0 ? MAP_DEFAULT_CAP : m->cap; \
     while (new_cap > new_map.cap) new_map.cap *= 2; \
  \
-    new_map.entries = malloc(sizeof(name##Entry) * new_map.cap); \
+    new_map.entries = calloc(new_map.cap, sizeof(name##Entry)); \
     assert(new_map.entries != NULL && "map realloc failed"); \
-     \
-    /* set all buckets to empty */ \
-    for(int i=0; i<new_map.cap; ++i) { \
-      new_map.entries[i].key.data = MAP_ENTRY_EMPTY; \
-      new_map.entries[i].key.len = 0; \
-    } \
  \
     /* rehash */ \
     for(int i=0; i<m->cap; ++i) { \
       name##Entry* e = &m->entries[i]; \
       if (!map_key_is_marker(e->key)) { \
-        name##_insert(m, e->key, e->val); \
+        name##_insert(&new_map, e->key, e->val); \
       } \
     } \
  \
@@ -199,6 +211,7 @@ typedef struct { \
   size_t skipped; \
 } name##Iter; \
  \
+ \
 name##Iter name##_iter(const name* m) { \
   name##Iter it = { m, NULL, 0 }; \
  \
@@ -272,15 +285,9 @@ void Set_reserve(Set* s, size_t new_cap) {
     new_set.cap = s->cap == 0 ? 16 : s->cap;
     while (new_cap > new_set.cap) new_set.cap *= 2;
 
-    new_set.keys = malloc(new_set.cap * sizeof(str));
-    new_set.bits = calloc(new_set.cap / 8, 1);
+    new_set.keys = calloc(new_set.cap, sizeof(str));
+    new_set.bits = calloc(new_set.cap / 8, sizeof(char));
     assert(new_set.keys != NULL && new_set.bits != NULL && "set realloc failed");
-
-    /* empty all buckets */
-    for(int i=0; i<new_set.cap; ++i) {
-      new_set.keys[i].data = MAP_ENTRY_EMPTY;
-      new_set.keys[i].len = 0;
-    }
 
     /* rehash */
     for(int i=0; i<s->cap; ++i) {
@@ -389,7 +396,7 @@ SetIter Set_iter(const Set* s) {
   return it;
 }
 
-bool Set_has(const Set* s) {
+bool Set_has(const SetIter* s) {
   return s->curr != NULL;
 }
 

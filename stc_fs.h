@@ -28,8 +28,8 @@
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
 
 // TODO: this is not thread safe
-static String fs_tmp_sb1 = {0};
-static String fs_tmp_sb2 = {0};
+static __thread String fs_tmp_sb1 = {0};
+static __thread String fs_tmp_sb2 = {0};
 
 int fs_err_code() {
 #ifndef _WIN32
@@ -45,7 +45,7 @@ char* fs_err_msg() {
   return strerror(err);
 #else 
   // TODO: is this thread safe?
-  static char buf[512];
+  static __thread char buf[512];
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
   DWORD len = FormatMessage(
     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
