@@ -14,7 +14,6 @@
 
 static const isize LIST_DEFAULT_CAP = 16; 
 
-// TODO: bitflags?
 // TODO: bitfields?
 // TODO: not sure if i want insert and remove
 // TODO: array_heap_to_list() is extremely dangerous
