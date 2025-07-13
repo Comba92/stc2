@@ -11,18 +11,18 @@
 // TODO: map_get() should return pointer?
 // TODO: arena keys
 
-static const int MAP_DEFAULT_CAP = 16; 
+static const isize MAP_DEFAULT_CAP = 16; 
 
 // https://nullprogram.com/blog/2018/07/31/
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
 
 // https://theartincode.stanis.me/008-djb2/
-long djb2(const char *s, size_t len)
+long djb2(const byte *s, isize len)
 {
   const unsigned long MAGIC = 5381;
 
   long hash = MAGIC;
-  for (const char* c = s; len > 0; c++, len--) {
+  for (const byte* c = s; len > 0; c++, len--) {
     hash = ((hash << 5) + hash) + (unsigned long) *c;
     /* hash = hash * 33 + c */
   }
@@ -30,34 +30,34 @@ long djb2(const char *s, size_t len)
   return hash;
 }
 
-size_t map_hash_key(str key, size_t cap) {
+isize map_hash_key(str key, isize cap) {
   /*
     invariant: capacity is always multiple of two;
     "hash % map->cap" can be rewritten as a logical AND, avoiding division
   */
-  size_t hash = djb2(key.data, key.len);
+  isize hash = djb2(key.data, key.len);
   return hash & (cap - 1);
 }
 
-size_t map_next_hash(size_t h, size_t i, size_t cap) {
-  // size_t hash = (h + 1); // linear probing
-  size_t hash = (h + i*i); // quadratic probing
+isize map_next_hash(isize h, isize i, isize cap) {
+  // isize hash = (h + 1); // linear probing
+  isize hash = (h + i*i); // quadratic probing
   return hash & (cap - 1);
 }
 
 /*
   Little trick; even though str is just a slice (thus doesn't own its memory),
   we can still break the rules. Only inside the map, str OWNS its memory.
-  This breaks the const char* qualifier only when we need to free its memory
-  (as free() doesn't expect const char* but only char*).
+  This breaks the const byte* qualifier only when we need to free its memory
+  (as free() doesn't expect const byte* but only byte*).
   Plus, supposing the user is not accessing the map entries directly, we can use the
   str pointer as a 'marker' for empty and deleted entries, 
   by assigning it low integers as it's pointer.
   This is hacky, but saves us the need for a marker field!
 */
 
-char* const MAP_ENTRY_EMPTY   = (char*) 0;
-char* const MAP_ENTRY_REMOVED = (char*) 1;
+byte* const MAP_ENTRY_EMPTY   = (byte*) 0;
+byte* const MAP_ENTRY_REMOVED = (byte*) 1;
 
 bool map_key_is_empty(str key) {
   return key.data == MAP_ENTRY_EMPTY;
@@ -76,12 +76,12 @@ typedef struct { \
 } name##Entry; \
  \
 typedef struct { \
-  size_t len, cap; \
+  isize len, cap; \
   name##Entry* entries; \
  \
 } name; \
  \
-name name##_with_cap(size_t cap) { \
+name name##_with_cap(isize cap) { \
   /* https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2 */ \
   if ((cap & (cap - 1)) != 0) { \
     cap--; \
@@ -98,10 +98,10 @@ name name##_with_cap(size_t cap) { \
   return (name) { 0, cap, data }; \
 } \
 name##Entry* name##_search(const name* m, str key) { \
-  size_t i = map_hash_key(key, m->cap); \
+  isize i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
  \
-  size_t retries = 0; \
+  isize retries = 0; \
   while (!map_key_is_empty(e->key) && retries < m->cap) { \
     if (!map_key_is_removed(e->key) && str_cmp(e->key, key) == 0) return e; \
     retries += 1; \
@@ -113,7 +113,7 @@ name##Entry* name##_search(const name* m, str key) { \
 } \
  \
 bool name##_insert(name*, str, type); \
-void name##_reserve(name* m, size_t new_cap) { \
+void name##_reserve(name* m, isize new_cap) { \
   if (new_cap > m->cap) { \
     name new_map = {0}; \
     new_map.cap = m->cap == 0 ? MAP_DEFAULT_CAP : m->cap; \
@@ -123,7 +123,7 @@ void name##_reserve(name* m, size_t new_cap) { \
     assert(new_map.entries != NULL && "map realloc failed"); \
  \
     /* rehash */ \
-    for(int i=0; i<m->cap; ++i) { \
+    for(isize i=0; i<m->cap; ++i) { \
       name##Entry* e = &m->entries[i]; \
       if (!map_key_is_marker(e->key)) { \
         name##_insert(&new_map, e->key, e->val); \
@@ -153,10 +153,10 @@ bool name##_contains(const name* m, str key) { \
 bool name##_insert(name* m, str key, int val) { \
   name##_reserve(m, m->len+1); \
   /* invariant: this can't fail to find an entry, as we always increase cap first */ \
-  size_t i = map_hash_key(key, m->cap); \
+  isize i = map_hash_key(key, m->cap); \
   name##Entry* e = &m->entries[i]; \
  \
-  size_t retries = 0; \
+  isize retries = 0; \
   while (!map_key_is_empty(e->key)) { \
     if (map_key_is_removed(e->key) || str_cmp(e->key, key) == 0) break; \
     retries += 1; \
@@ -184,7 +184,7 @@ bool name##_remove(name* m, str key) { \
   if (e == NULL) { \
     return false; \
   } else { \
-    free((char*) e->key.data); \
+    free((byte*) e->key.data); \
     e->key.data = MAP_ENTRY_REMOVED; \
     e->key.len = 0; \
     m->len -= 1; \
@@ -198,7 +198,7 @@ void name##_clear(name* m) { \
   /* keys are owned, free them */ \
   for (int i=0; i<m->cap; ++i) { \
     str key = m->entries[i].key; \
-    if (!map_key_is_marker(key)) free((char*) key.data); \
+    if (!map_key_is_marker(key)) free((byte*) key.data); \
   } \
 } \
  \
@@ -211,7 +211,7 @@ void name##_free(name* m) { \
 typedef struct { \
   const name* src; \
   name##Entry* curr; \
-  size_t skipped; \
+  isize skipped; \
 } name##Iter; \
  \
  \
@@ -219,7 +219,7 @@ name##Iter name##_iter(const name* m) { \
   name##Iter it = { m, NULL, 0 }; \
  \
   if (m->cap == 0) return it; \
-  int i; \
+  isize i; \
   for(i=0; i<m->cap && map_key_is_marker(m->entries[i].key); ++i); \
   it.skipped = i+1; \
   it.curr = i < m->cap ? &m->entries[i] : NULL; \
@@ -234,7 +234,7 @@ bool name##_has(name##Iter* it) { \
 name##Entry* name##_next(name##Iter* it) { \
   if (it->curr == NULL) return NULL; \
  \
-  int i; \
+  isize i; \
   for(i=it->skipped; i<it->src->cap && map_key_is_marker(it->src->entries[i].key); ++i); \
   it->skipped = i+1; \
   name##Entry* e = it->curr; \
@@ -249,24 +249,24 @@ name##Entry* name##_next(name##Iter* it) { \
 // TODO: wouldn't it be more effficient to store u32 or u64 for bits?
 
 typedef struct {
-  size_t cap, len;
+  isize cap, len;
   str* keys;
-  char* bits;
+  byte* bits;
 } Set;
 
 struct SetBitIdx {
-  size_t byte_idx;
+  isize byte_idx;
   char bit_idx;
 };
 
-struct SetBitIdx Set_bit_idx(size_t i) {
-  size_t byte_idx = i / 8;
-  size_t bit_idx = i % 8;
+struct SetBitIdx Set_bit_idx(isize i) {
+  isize byte_idx = i / 8;
+  isize bit_idx = i % 8;
   return (struct SetBitIdx) { byte_idx, bit_idx };
 }
 
 int Set_search(const Set* s, str key) {
-  size_t i = map_hash_key(key, s->cap);
+  isize i = map_hash_key(key, s->cap);
   str fkey = s->keys[i];
 
   int retries = 0;
@@ -282,7 +282,7 @@ int Set_search(const Set* s, str key) {
 }
 
 bool Set_insert(Set*, str);
-void Set_reserve(Set* s, size_t new_cap) {
+void Set_reserve(Set* s, isize new_cap) {
   if (new_cap > s->cap) {
     Set new_set = {0};
     new_set.cap = s->cap == 0 ? 16 : s->cap;
@@ -310,24 +310,28 @@ void Set_reserve(Set* s, size_t new_cap) {
 
 bool Set_contains(const Set* s, str key) {
   if (s->len == 0) return false;
-  int i = Set_search(s, key);
+  isize i = Set_search(s, key);
   if (i == -1) return false;
 
   struct SetBitIdx idx = Set_bit_idx(i);
 
-  char* byte = &s->bits[idx.byte_idx];
+  byte* byte = &s->bits[idx.byte_idx];
   return (((*byte) >> idx.bit_idx) & 1) != 0;
 }
 
 bool Set_insert(Set* s, str key) {
   Set_reserve(s, s->len+1);
 
-  size_t i = map_hash_key(key, s->cap);
+  isize i = map_hash_key(key, s->cap);
   str fkey = s->keys[i];
-  int retries = 0;
+  isize retries = 0;
   while (!map_key_is_empty(fkey)) {
     if (map_key_is_removed(fkey)) break;
-    if (str_cmp(key, fkey) == 0) i = -1; break;
+    if (str_cmp(key, fkey) == 0) {
+      i = -1; 
+      break;
+    }
+    
     retries += 1;
     i = map_next_hash(i, retries, s->cap);
     fkey = s->keys[i];
@@ -339,7 +343,7 @@ bool Set_insert(Set* s, str key) {
   s->keys[i] = str_clone(key);
   s->len += 1;
   struct SetBitIdx idx = Set_bit_idx(i);
-  char* byte = &s->bits[idx.byte_idx];
+  byte* byte = &s->bits[idx.byte_idx];
   *byte |= (1 << idx.bit_idx);
 
   return true;
@@ -351,13 +355,13 @@ bool Set_remove(Set* s, str key) {
   if (i == -1) return false;
 
   str* fkey = &s->keys[i];
-  free((char*) fkey->data);
+  free((byte*) fkey->data);
   fkey->data = MAP_ENTRY_REMOVED;
   fkey->len = 0;
   s->len -= 1;
 
   struct SetBitIdx idx = Set_bit_idx(i);
-  char* byte = &s->bits[idx.byte_idx];
+  byte* byte = &s->bits[idx.byte_idx];
   *byte &= ~(1 << idx.bit_idx);
 
   return true;
@@ -370,7 +374,7 @@ void Set_clear(Set* s) { \
 
   for (int i=0; i<s->cap; ++i) {
     str key = s->keys[i];
-    if (!map_key_is_marker(key)) free((char*) key.data);
+    if (!map_key_is_marker(key)) free((byte*) key.data);
   }
 }
 
@@ -386,7 +390,7 @@ void Set_free(Set* s) {
 typedef struct {
   const Set* src;
   str* curr;
-  size_t skipped;
+  isize skipped;
 } SetIter;
 
 SetIter Set_iter(const Set* s) {

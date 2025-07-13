@@ -18,7 +18,7 @@ bool int_is_even(const int* val) {
   return *val % 2 == 0;
 }
 
-int int_cmp(const int* a, const int* b) {
+isize int_cmp(const int* a, const int* b) {
   return *a - *b;
 }
 

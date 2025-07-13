@@ -1,10 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "stc_defs.h"
 
 typedef struct {
-  size_t cap, len;
-  size_t front, back;
+  isize cap, len;
+  isize front, back;
   int* data;
 } Deque;
 
@@ -16,19 +17,19 @@ typedef struct {
 // TODO: should out of bounds access panic or return bool?
 // TODO: generalize with macro
 
-void deque_reserve(Deque* d, size_t new_cap) {
+void deque_reserve(Deque* d, isize new_cap) {
   if (new_cap > d->cap) {
     d->cap = d->cap == 0 ? 16 : d->cap;
 
-    size_t cap = d->cap;
+    isize cap = d->cap;
     while (new_cap > d->cap) d->cap *= 2;
     d->data = realloc(d->data, sizeof(int) * d->cap);
     assert(d->data != NULL && "deque realloc failed");
 
     if (d->front <= d->back) return;
 
-    size_t back_len  = d->back;
-    size_t front_len = d->len - d->front;
+    isize back_len  = d->back;
+    isize front_len = d->len - d->front;
 
     if (back_len < front_len) {
       memcpy(
@@ -94,22 +95,22 @@ int deque_pop_front(Deque* d) {
   return value;
 }
 
-int deque_real_idx(Deque* d, size_t i) {
+int deque_real_idx(Deque* d, isize i) {
   assert(i < d->len && "deque access out of bounds");
   return (d->front + i) & (d->cap - 1);
 }
 
-int* deque_get(Deque* d, size_t i) {
+int* deque_get(Deque* d, isize i) {
   return &d->data[deque_real_idx(d, i)];
 }
 
-void deque_set(Deque* d, size_t i, int value) {
+void deque_set(Deque* d, isize i, int value) {
   d->data[deque_real_idx(d, i)] = value;
 }
 
 int deque_back(Deque* d) {
   assert(d->len > 0 && "accessed empty queue");
-  size_t back;
+  isize back;
   if (d->back == 0) back = d->cap - 1;
   else back = (d->back - 1) & (d->cap - 1);
   return d->data[back];
@@ -120,7 +121,7 @@ int deque_front(Deque* d) {
   return d->data[d->front];
 }
 
-void deque_swap(Deque* d, size_t a, size_t b) {
+void deque_swap(Deque* d, isize a, isize b) {
   int left = deque_get(d, a);
   int right = deque_get(d, b);
   int tmp = left;
@@ -129,8 +130,8 @@ void deque_swap(Deque* d, size_t a, size_t b) {
 }
 
 // TODO: this is confusing
-// void deque_append_front(Deque* d, int* data, size_t len) {
-//   size_t old_cap;
+// void deque_append_front(Deque* d, int* data, isize len) {
+//   isize old_cap;
 //   deque_reserve(d, d->len + len);
 //   int remaining = len;
 //   if (d->front >= d->back) {
@@ -151,27 +152,27 @@ void deque_swap(Deque* d, size_t a, size_t b) {
 //   d->front -= len;
 // }
 
-void deque_append_back(Deque* d, int* data, size_t len) {
+void deque_append_back(Deque* d, int* data, isize len) {
   deque_reserve(d, d->len + len);
   memcpy(d->data + d->back, data, len);
   d->back += len;
   d->len += len;
 }
 
-Deque deque_from_array(int* data, size_t len) {
+Deque deque_from_array(int* data, isize len) {
   Deque res = {0};
   deque_append_back(&res, data, len);
   return res;
 }
 
 // TODO: this is confusing
-// void deque_resize(Deque* d, size_t new_len, type value) {
+// void deque_resize(Deque* d, isize new_len, type value) {
 //   if (new_len <= d->len) {
 //     d->len = new_len;
 //     d->back = (new_len > d->back) ?  : new_len;
 //   } else {
 //     deque_reserve(d, new_len);
-//     size_t range = (new_len - d->len);
+//     isize range = (new_len - d->len);
 //     for (int i=d->back; i<range; ++i) {
 //       d->data[(d->back + i) & (d->cap - 1)] = value;
 //     }

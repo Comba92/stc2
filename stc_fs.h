@@ -20,14 +20,15 @@
   // this trims windows.h with minimal functionality
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
-
+  
   #define PATH_MAX_LEN MAX_PATH
+  
+  #include <sys/stat.h>
+  #define stat _stati64
 #endif
 
-// TODO: fseek/ftell on aren't handling files bigger than 4gigs
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
 
-// TODO: this is not thread safe
 static __thread String fs_tmp_sb1 = {0};
 static __thread String fs_tmp_sb2 = {0};
 
@@ -118,7 +119,8 @@ bool file_read_to_string(String* sb, const char* path) {
     return false;
   }
 
-  size_t file_size = ftell(f);
+  // TODO: wont work on files bigger than 2gigs
+  isize file_size = ftell(f);
   if (file_size < 0) {
     #ifdef STC_LOG_ERR
     fs_err_print(path);
@@ -136,7 +138,7 @@ bool file_read_to_string(String* sb, const char* path) {
   }
 
   String_reserve(sb, file_size);
-  size_t read = fread(sb->data, 1, file_size, f);
+  isize read = fread(sb->data, 1, file_size, f);
   sb->len = read;
 
   #ifdef STC_LOG_ERR
@@ -149,9 +151,9 @@ bool file_read_to_string(String* sb, const char* path) {
   return read == file_size;
 }
 
-bool file_write_bytes(const char* path, const char* data, size_t len) {
+bool file_write_bytes(const char* path, const char* data, isize len) {
   FILE* fd = file_open_write(path);
-  size_t wrote = fwrite(data, 1, len, fd);
+  isize wrote = fwrite(data, 1, len, fd);
   bool res = wrote != len;
 
   #ifdef STC_LOG_ERR
@@ -255,7 +257,7 @@ str path_prefix(const char* path) {
 }
 
 bool path_is_absolute(const char * path) {
-  size_t len = strlen(path);
+  isize len = strlen(path);
 
   if (len < 1) return false;
   bool is_unix_abs = path[0] == '/';
@@ -349,7 +351,7 @@ char* dir_current(String* sb) {
   sb->len = strlen(sb->data);
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getcurrentdirectory
-  size_t path_len = GetCurrentDirectory(0, NULL);
+  isize path_len = GetCurrentDirectory(0, NULL);
 
   if (path_len == 0) {
     #ifdef STC_LOG_ERR
@@ -401,7 +403,7 @@ typedef enum {
 
 typedef struct {
   char* name;
-  size_t size;
+  isize size;
   FileType type;
 } DirEntry;
 
@@ -414,7 +416,7 @@ typedef struct {
   HANDLE h;
 #endif
   bool finished;
-  size_t err_count;
+  isize err_count;
   DirEntry curr;
 } DirIter;
 
@@ -444,7 +446,7 @@ DirIter dir_open(const char* dirpath) {
   bool had_error = dir_fd == -1 || dir == NULL;
   DirIter it = { dir_fd, dir, had_error, had_error ? 1 : 0 };
 #else
-  char buf[PATH_MAX_LEN];
+  static char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
 
   // https://learn.microsoft.com/it-it/windows/win32/fileio/listing-the-files-in-a-directory
@@ -520,7 +522,7 @@ DirEntry* dir_read(DirIter* it) {
 
     it->err_count += 1;
     it->curr.name = "";
-    it->curr.size = 0;
+    it->curr.size = -1;
     it->curr.type = FileType_Other;
     return &it->curr;
   }
@@ -565,7 +567,7 @@ DirEntry* dir_read(DirIter* it) {
 
   // get file data
   it->curr.name = filename;
-  it->curr.size = (((size_t) it->data.nFileSizeHigh) << 32) | it->data.nFileSizeLow;
+  it->curr.size = (((isize) it->data.nFileSizeHigh) << 32) | it->data.nFileSizeLow;
   switch (it->data.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: it->curr.type = FileType_Dir; break;
     default: it->curr.type = FileType_File; break;
@@ -671,21 +673,16 @@ FileType file_type(const char* path) {
 #endif
 }
 
-// TODO: handle big sizes on linux
-size_t file_size(const char* path) {
-  FILE* f = file_open_read(path);
-  if (f == NULL) return 0;
+isize file_size(const char* path) {
+  struct stat buf;
+  if (stat(path, &buf) != 0) {
+    #ifdef STC_LOG_ERR
+    fs_err_print(path);
+    #endif
+    return -1;
+  }
 
-#ifndef _WIN32
-  if (fseek(f, 0, SEEK_END) != 0) return 0;
-  long long res = ftell(f);
-#else 
-  if (_fseeki64(f, 0, SEEK_END) != 0) return 0;
-  long long res = _ftelli64(f);
-#endif
-
-  if (res < 0) return 0;
-  else return res;
+  return buf.st_size;
 }
 
 bool dir_create(const char* path) {
@@ -778,7 +775,7 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
     #endif
     return false;
   }
-  size_t src_size = statbuf.st_size;
+  isize src_size = statbuf.st_size;
 
   int flags = overwrite ? O_TRUNC : 0;
   int dst_fd = open(dst, O_WRONLY | O_CREAT | flags, S_IRWXU | S_IRWXG | S_IRWXO);
@@ -962,8 +959,8 @@ bool dir_delete_recursive(const char* path) {
 bool fs_copy(const char* src, const char* dst, bool overwrite) {
   FileType type = file_type(src);
   switch(type) {
-    FileType_File: return file_copy(src, dst, overwrite);
-    FileType_Dir: return dir_copy_recursive(src, dst, overwrite);
+    case FileType_File: return file_copy(src, dst, overwrite);
+    case FileType_Dir: return dir_copy_recursive(src, dst, overwrite);
     default: return false;
   }
 }
@@ -975,8 +972,8 @@ bool fs_move(const char* src, const char* dst, bool overwrite) {
 bool fs_delete(const char* path) {
   FileType type = file_type(path);
   switch (type) {
-    FileType_File: return file_delete(path);
-    FileType_Dir: return dir_delete_recursive(path);
+    case FileType_File: return file_delete(path);
+    case FileType_Dir: return dir_delete_recursive(path);
     default: return false;
   }
 }

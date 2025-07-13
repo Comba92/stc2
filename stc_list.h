@@ -2,36 +2,18 @@
 #define STC_LIST_IMPL
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <time.h>
-#include <stdint.h>
-#include <stddef.h>
-
-typedef char      byte;
-typedef uint8_t   u8;
-typedef int8_t    i8;
-typedef uint16_t  u16;
-typedef int16_t   i16;
-typedef uint32_t  u32;
-typedef int32_t   i32;
-typedef uint64_t  u64;
-typedef int64_t   i64;
-typedef float     f32;
-typedef double    f64;
-typedef uintptr_t uptr;
-typedef ptrdiff_t isize;
-typedef size_t    usize;
+#include "stc_defs.h"
 
 #define rangefor(type, it, start, end) for (type it = (start); it < (end); ++it)
 #define listfor(type, it, list) for (type it = 0; it < (list)->len; ++it)
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
-static const int LIST_DEFAULT_CAP = 16; 
+static const isize LIST_DEFAULT_CAP = 16; 
 
-// TODO: deal with indexes sizes, just fucking use stdint.h
 // TODO: bitflags?
 // TODO: bitfields?
 // TODO: not sure if i want insert and remove
@@ -41,11 +23,11 @@ static const int LIST_DEFAULT_CAP = 16;
 
 #define list_def(type, name) \
 typedef struct { \
-  size_t len, cap; \
+  isize len, cap; \
   type* data; \
 } name; \
  \
-name name##_with_cap(size_t cap) { \
+name name##_with_cap(isize cap) { \
   /* https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2 */ \
   if ((cap & (cap - 1)) != 0) { \
     cap--; \
@@ -62,7 +44,7 @@ name name##_with_cap(size_t cap) { \
   return (name) { 0, cap, data }; \
 } \
  \
-void name##_reserve(name* l, size_t new_cap) { \
+void name##_reserve(name* l, isize new_cap) { \
   if (new_cap > l->cap) { \
     l->cap = l->cap == 0 ? LIST_DEFAULT_CAP : l->cap; \
     while (new_cap > l->cap) l->cap *= 2; \
@@ -71,12 +53,12 @@ void name##_reserve(name* l, size_t new_cap) { \
     assert(l->data != NULL && "list realloc failed"); \
   } \
 } \
-void name##_resize(name* l, size_t new_len, type value) { \
+void name##_resize(name* l, isize new_len, type value) { \
   if (new_len <= l->len) { \
     l->len = new_len; \
   } else { \
     name##_reserve(l, l->len + new_len); \
-    /*size_t range = (new_len - l->len); \
+    /*isize range = (new_len - l->len); \
     for (int i=0; i<range; ++i) { \
       l->data[l->len + i] = value; \
     } */ \
@@ -92,7 +74,7 @@ void name##_push(name* l, type value) { \
   l->data[l->len++] = value; \
 } \
  \
-void name##_assert(name l, size_t i) { \
+void name##_assert(name l, isize i) { \
   assert(i < l.len && "list access out of bounds"); \
 } \
  \
@@ -110,7 +92,7 @@ type name##_pop(name* l) { \
   return l->data[--l->len]; \
 } \
  \
-void name##_swap(name* l, size_t a, size_t b) { \
+void name##_swap(name* l, isize a, isize b) { \
   name##_assert(*l, a); \
   name##_assert(*l, b); \
   type tmp = l->data[a]; \
@@ -121,13 +103,13 @@ void name##_swap(name* l, size_t a, size_t b) { \
 name name##_shuffle(name* l) { \
   /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
   srand(time(NULL)); \
-  for(int i=l->len-1; i>0; --i) { \
-    int r = rand() % (i+1); \
+  for(isize i=l->len-1; i>0; --i) { \
+    isize r = rand() % (i+1); \
     name##_swap(l, i, r); \
   } \
   return *l; \
 } \
-type name##_remove_swap(name* l, size_t i) { \
+type name##_remove_swap(name* l, isize i) { \
   name##_assert(*l, i); \
   l->len--; \
   type res = l->data[i]; \
@@ -135,10 +117,10 @@ type name##_remove_swap(name* l, size_t i) { \
   return res; \
 } \
  \
-typedef int (*name##CmpFn)(const type* a, const type* b); \
-int name##_find(const name* l, type value, name##CmpFn pred) { \
+typedef isize (*name##CmpFn)(const type* a, const type* b); \
+isize name##_find(const name* l, type value, name##CmpFn pred) { \
   const type* b = (const type*) &value; \
-  listfor(int, i, l) { \
+  listfor(isize, i, l) { \
     const type* a = (const type*) &l->data[i]; \
     if (pred(a, b) == 0) return i; \
   } \
@@ -151,25 +133,25 @@ bool name##_contains(const name* l, type value, name##CmpFn pred) { \
 } \
  \
 name name##_reverse(name* l) { \
-  for(int left=0, right=l->len-1; left<right; ++left, --right) { \
+  for(isize left=0, right=l->len-1; left<right; ++left, --right) { \
     name##_swap(l, left, right); \
   } \
   return *l; \
 } \
  \
-void name##_append_array(name* l, const type* arr, size_t arr_len) { \
+void name##_append_array(name* l, const type* arr, isize arr_len) { \
   name##_reserve(l, l->len + arr_len); \
   memcpy(l->data + l->len, arr, arr_len * sizeof(type)); \
   l->len += arr_len; \
 } \
  \
-name name##_from_array(const type* arr, size_t arr_len) { \
+name name##_from_array(const type* arr, isize arr_len) { \
   name res = {0}; \
   name##_append_array(&res, arr, arr_len); \
   return res; \
 } \
  \
-name array_heap_to_##name(type* *const arr, size_t arr_len) { \
+name array_heap_to_##name(type* *const arr, isize arr_len) { \
   name res = {0}; \
   res.len = arr_len; \
   /* trick: if we set cap to 0, next time we push, will be reallocated accordingly to len */ \
@@ -196,7 +178,7 @@ void name##_free(name* l) { \
 } \
  \
 bool name##_is_sorted(const name* l, name##CmpFn pred) { \
-  for(int i=0; i<l->len-1; ++i) { \
+  for(isize i=0; i<l->len-1; ++i) { \
     const type* a = (const type*) &l->data[i]; \
     const type* b = (const type*) &l->data[i+1]; \
     if (pred(a, b) >= 0) return false; \
@@ -212,7 +194,7 @@ name name##_sort(name* l, name##CmpFn pred) { \
  \
 typedef bool (*name##EqFn)(const type* val); \
 bool name##_all(name* l, name##EqFn pred) { \
-  listfor(int, i, l) { \
+  listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     if (!pred(it)) return false; \
   } \
@@ -220,16 +202,16 @@ bool name##_all(name* l, name##EqFn pred) { \
 } \
  \
 bool name##_any(name* l, name##EqFn pred) { \
-  listfor(int, i, l) { \
+  listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     if (pred(it)) return true; \
   } \
   return false; \
 } \
  \
-size_t name##_count(name* l, name##EqFn pred) { \
-  size_t count = 0; \
-  listfor(int, i, l) { \
+isize name##_count(name* l, name##EqFn pred) { \
+  isize count = 0; \
+  listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     count += pred(it); \
   } \
@@ -237,8 +219,8 @@ size_t name##_count(name* l, name##EqFn pred) { \
 } \
  \
 name name##_filter(name* l, name##EqFn pred) { \
-  size_t curr = 0; \
-  listfor(int, i, l) { \
+  isize curr = 0; \
+  listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     if (pred(it)) l->data[curr++] = l->data[i]; \
   } \
@@ -248,8 +230,8 @@ name name##_filter(name* l, name##EqFn pred) { \
  \
 name name##_dedup(name* l, name##CmpFn pred) { \
   if (! name##_is_sorted(l, pred)) name##_sort(l, pred); \
-  size_t curr = 0; \
-  for (int i=0; i<l->len-1; ++i) { \
+  isize curr = 0; \
+  for (isize i=0; i<l->len-1; ++i) { \
     const type* a = (const type*) &l->data[i]; \
     const type* b = (const type*) &l->data[i+1]; \
     if (pred(a, b) < 0) l->data[curr++] = l->data[i]; \
@@ -257,7 +239,7 @@ name name##_dedup(name* l, name##CmpFn pred) { \
   l->len = curr; \
   return *l; \
 } \
-size_t name##_bsearch(name* l, type val, name##CmpFn pred) { \
+isize name##_bsearch(name* l, type val, name##CmpFn pred) { \
   type* res = bsearch( \
     (const type*) &val, \
     (const type*) l->data, \
@@ -271,7 +253,7 @@ size_t name##_bsearch(name* l, type val, name##CmpFn pred) { \
 list_def(int, IntList)
 
 IntList IntList_next_perm(IntList* l) {
-  int i;
+  isize i;
 
   // find pivot
   for(i=l->len-2; i >= 0 && l->data[i] >= l->data[i+1]; --i);
@@ -281,11 +263,11 @@ IntList IntList_next_perm(IntList* l) {
 
   int pivot = l->data[i];
   // find smallest number right to pivot
-  int j;
+  isize j;
   for(j=l->len-1; j > i && l->data[j] <= pivot; --j);
   IntList_swap(l, i, j);
 
-  for(int left=i+1, right=l->len-1; left<right; ++left, --right) {
+  for(isize left=i+1, right=l->len-1; left<right; ++left, --right) {
     IntList_swap(l, left, right);
   }
 
@@ -293,43 +275,43 @@ IntList IntList_next_perm(IntList* l) {
 }
 
 typedef struct {
-  size_t start, len;
+  isize start, len;
 } IntSlice;
 
 typedef struct {
   const IntList* src;
-  const size_t size;
-  size_t curr;
+  const isize size;
+  isize curr;
 } ChunksIter;
 
-ChunksIter list_chunks(const IntList* l, size_t size) {
+ChunksIter list_chunks(const IntList* l, isize size) {
   return (ChunksIter) { l, size, 0 };
 }
 bool list_has_chunk(const ChunksIter* it) {
   return it->curr < it->src->len;
 }
 IntSlice list_next_chunk(ChunksIter* it) {
-  size_t start = it->curr;
-  size_t len = start + it->size;
+  isize start = it->curr;
+  isize len = start + it->size;
   it->curr += it->size;
   return (IntSlice) { start, len };
 }
 
 typedef struct {
   const IntList* src;
-  const size_t size;
-  size_t curr;
+  const isize size;
+  isize curr;
 } WindowsIter;
 
-WindowsIter list_windows(const IntList* l, size_t size) {
+WindowsIter list_windows(const IntList* l, isize size) {
   return (WindowsIter) { l, size, 0 };
 }
 bool list_has_window(const WindowsIter* it) {
   return it->curr + it->size < it->src->len;
 }
 IntSlice list_next_window(WindowsIter* it) {
-  size_t start = it->curr;
-  size_t len = start + it->size;
+  isize start = it->curr;
+  isize len = start + it->size;
   it->curr += 1;
   return (IntSlice) { start, len };
 }

@@ -8,76 +8,76 @@
 #include <string.h>
 #include <assert.h>
 
-bool c_is_space(char c) {
+bool c_is_space(byte c) {
   switch (c) {
     case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': return true;
     default: return false;
   }
 }
-bool c_is_alpha(char c) {
+bool c_is_alpha(byte c) {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
-bool c_is_digit(char c) {
+bool c_is_digit(byte c) {
   return c >= '0' && c <= '9';
 }
-bool c_is_alphanum(char c) {
+bool c_is_alphanum(byte c) {
   return c_is_alpha(c) || c_is_digit(c);
 }
-bool c_is_punct(char c) {
-  // const char puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+bool c_is_punct(byte c) {
+  // const byte puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
   return (c >= '!' && c <= '/') 
   || (c >= ':' && c <= '@') 
   || (c >= '[' && c <= '`')
   || (c >= '{' && c <= '~');
 }
-bool c_is_lower(char c) {
+bool c_is_lower(byte c) {
   return c >= 'a' && c <= 'z';
 }
-bool c_is_upper(char c) {
+bool c_is_upper(byte c) {
   return c >= 'A' && c <= 'Z';
 }
-bool c_is_cntrl(char c) {
+bool c_is_cntrl(byte c) {
   return (c >= 0 || c <= 31) || c == 127;
 }
 
-char c_to_lower(char c) {
+byte c_to_lower(byte c) {
   return c_is_upper(c) ? c - 'A' + 'a' : c;
 }
-char c_to_upper(char c) {
+byte c_to_upper(byte c) {
   return c_is_lower(c) ? c - 'a' + 'A' : c;
 }
 
 // TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
-  size_t len;
-  const char* data;
+  isize len;
+  const byte* data;
 } str;
 
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
 #define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
 
-char* str_to_cstr(str s) {
-  char* res = malloc(s.len + 1);
+byte* str_to_cstr(str s) {
+  byte* res = malloc(s.len + 1);
   memcpy(res, s.data, s.len);
   res[s.len + 1] = '\0';
   return res;
 }
 
 str str_clone(str s) {
-  char* cloned = malloc(s.len);
+  byte* cloned = malloc(s.len);
   memcpy(cloned, s.data, s.len);
   return (str) { s.len, cloned };
 }
 
-str str_from_cstr(const char* s) {
+str str_from_cstr(const byte* s) {
   return (str) { strlen(s), s };
 }
 
 #define SV(cstr) str_from_cstr((cstr))
 
-str str_from_cstr_unchecked(const char* s, size_t len) {
+str str_from_cstr_unchecked(const byte* s, isize len) {
   return (str) { len, s };
 }
 
@@ -87,7 +87,7 @@ bool str_is_empty(str s) {
   return s.data == NULL || s.data[0] == '\0' || s.len == 0;
 }
 
-str str_slice(str s, size_t start, size_t end) {
+str str_slice(str s, isize start, isize end) {
   // assert(start <= end && "str_slice(): start must be smaller than end");
   if (start >= end) return STR_EMPTY;
 
@@ -102,7 +102,7 @@ str str_slice(str s, size_t start, size_t end) {
   };
 }
 
-str cstr_slice(const char* c, size_t start, size_t end) {
+str cstr_slice(const byte* c, isize start, isize end) {
   return str_slice(str_from_cstr(c), start, end);
 }
 
@@ -121,30 +121,30 @@ bool str_eq_ignorecase(str a, str b) {
   return true;
 }
 
-int str_cmp(str a, str b) {
+isize str_cmp(str a, str b) {
   if (a.len != b.len) return a.len - b.len;
   else return memcmp(a.data, b.data, a.len);
 }
 
-int str_find(str s, char c) {
-  char* res = memchr(s.data, c, s.len);
+isize str_find(str s, byte c) {
+  byte* res = memchr(s.data, c, s.len);
   return res != NULL ? res - s.data : -1;
 }
 
-int str_find_rev(str s, char c) {
-  char* res = strrchr(s.data, c);
+isize str_find_rev(str s, byte c) {
+  byte* res = strrchr(s.data, c);
   return res != NULL ? res - s.data : -1;
 }
 
-bool str_contains(str s, char c) {
+bool str_contains(str s, byte c) {
   return str_find(s, c) != -1;
 }
 
-int str_match(str s, str target) {
+isize str_match(str s, str target) {
   if (target.len > s.len) return -1;
   str window = str_slice(s, 0, target.len);
 
-  for(size_t i=0; i <= s.len - target.len; ++i) {
+  for(isize i=0; i <= s.len - target.len; ++i) {
     if (str_eq(window, target)) return i;
     window.data += 1;
   }
@@ -156,7 +156,7 @@ IntList str_match_all(str s, str target) {
   IntList matches = {0};
   str window = str_slice(s, 0, target.len);
 
-  for (size_t i=0; i <= s.len - target.len; ++i) {
+  for (isize i=0; i <= s.len - target.len; ++i) {
     if (str_eq(window, target)) {
       IntList_push(&matches, i);
     }
@@ -167,45 +167,45 @@ IntList str_match_all(str s, str target) {
 }
 
 
-str str_skip(str s, size_t n) {
+str str_skip(str s, isize n) {
   // redundant check; str_slice already clamps n
   // if (n > s.len) return STR_EMPTY;
   return str_slice(s, n, s.len);
 }
-str str_take(str s, size_t n) {
+str str_take(str s, isize n) {
   // redundant check; str_slice already clamps n
   // if (n > s.len) return s;
   return str_slice(s, 0, n);
 }
 
 
-str str_skip_rev(str s, size_t n) {
+str str_skip_rev(str s, isize n) {
   // check neccessary; overflow otherwise
   if (n > s.len) return STR_EMPTY;
   return str_slice(s, 0, s.len - n);
 }
-str str_skip_untilc(str s, char c) {
+str str_skip_untilc(str s, byte c) {
   int idx = str_find(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_skip(s, idx);
 }
-str str_skip_rev_untilc(str s, char c) {
+str str_skip_rev_untilc(str s, byte c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_take(s, idx);
 }
 
-str str_take_rev(str s, size_t n) {
+str str_take_rev(str s, isize n) {
   // check neccessary; overflow otherwise
   if (n > s.len) return s;
   return str_slice(s, s.len - n, s.len);
 }
-str str_take_untilc(str s, char c) {
+str str_take_untilc(str s, byte c) {
   int idx = str_find(s, c);
   if (idx == -1) return s;
   return str_take(s, idx);
 }
-str str_take_rev_untilc(str s, char c) {
+str str_take_rev_untilc(str s, byte c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return s;
   return str_skip(s, idx);
@@ -220,42 +220,42 @@ str str_take_until(str s, str target) {
   return str_take(s, idx);
 }
 
-typedef bool (*CharPredicate)(char val);
+typedef bool (*CharPredicate)(byte val);
 
-int str_advance_while(str s, CharPredicate p) {
-  listfor(int, i, &s) {
+isize str_advance_while(str s, CharPredicate p) {
+  listfor(isize, i, &s) {
     if (!p(s.data[i])) return i;
   }
   return s.len;
 }
-int str_advance_while_not(str s, CharPredicate p) {
-  listfor(int, i, &s) {
+isize str_advance_while_not(str s, CharPredicate p) {
+  listfor(isize, i, &s) {
     if (p(s.data[i])) return i;
   }
   return s.len;
 }
-int str_advance_rev_while(str s, CharPredicate p) {
-  listforrev(int, i, &s) {
+isize str_advance_rev_while(str s, CharPredicate p) {
+  listforrev(isize, i, &s) {
     if (!p(s.data[i])) return s.len-1 - i;
   }
   return s.len;
 }
 
 str str_skip_while(str s, CharPredicate p) {
-  int match = str_advance_while(s, p);
+  isize match = str_advance_while(s, p);
   return str_skip(s, match);
 }
 str str_skip_rev_while(str s, CharPredicate p) {
-  int match = str_advance_rev_while(s, p);
+  isize match = str_advance_rev_while(s, p);
   return str_skip_rev(s, match);
 }
 
 str str_take_while(str s, CharPredicate p) {
-  int match = str_advance_while(s, p);
+  isize match = str_advance_while(s, p);
   return str_take(s, match);
 }
 str str_take_rev_while(str s, CharPredicate p) {
-  int match = str_advance_rev_while(s, p);
+  isize match = str_advance_rev_while(s, p);
   return str_take_rev(s, match);
 }
 
@@ -291,7 +291,7 @@ str str_trim(str s) {
 }
 
 list_def(str, StrList)
-StrList str_splitc_collect(str s, char c) {
+StrList str_splitc_collect(str s, byte c) {
   StrList ss = {0};
 
   while (s.len > 0) {
@@ -352,13 +352,12 @@ StrList str_words_collect(str s) {
 typedef struct {
   str src;
   const str target;
-  size_t skipped;
-  // TODO: consider using pointer to int instead
-  int last_match;
+  isize skipped;
+  isize last_match;
 } StrMatches;
 
 StrMatches str_matches(str s, str target) {
-  int match = str_match(s, target);
+  isize match = str_match(s, target);
   if (match == -1) {
     return (StrMatches) { STR_EMPTY, target, s.len, match };
   } else {
@@ -370,13 +369,13 @@ bool str_has_match(const StrMatches* it) {
   return it->last_match != -1;
 }
 
-int str_next_match(StrMatches* it) {
+isize str_next_match(StrMatches* it) {
   if (it->last_match == -1) return -1;
 
-  int last = it->last_match;
-  int idx = it->skipped;
+  isize last = it->last_match;
+  isize idx = it->skipped;
   
-  int match = str_match(it->src, it->target);
+  isize match = str_match(it->src, it->target);
   if (match == -1) {
     it->skipped += it->src.len;
     it->src = STR_EMPTY;  
@@ -392,10 +391,10 @@ int str_next_match(StrMatches* it) {
 // TODO: this is clutter, consider removing it
 typedef struct {
   str src;
-  const char c;
+  const byte c;
 } StrSplitChar;
 
-StrSplitChar str_splitc(str s, char c) {
+StrSplitChar str_splitc(str s, byte c) {
   return (StrSplitChar) { s, c };
 }
 
@@ -404,7 +403,7 @@ bool str_has_splitc(const StrSplitChar* it) {
 }
 
 str str_next_splitc(StrSplitChar* it) {
-  int i = str_find(it->src, it->c);
+  isize i = str_find(it->src, it->c);
   if (i == -1) {
     str res = it->src;
     it->src = STR_EMPTY;
@@ -521,7 +520,7 @@ void String_append_null(String* sb) {
   sb->data[sb->len] = '\0';
 }
 
-void String_append_cstr(String* sb, const char* s) {
+void String_append_cstr(String* sb, const byte* s) {
   String_append_array(sb, s, strlen(s));
   String_append_null(sb);
 }
@@ -530,7 +529,7 @@ void String_append_str(String* sb, str sv) {
   String_append_array(sb, sv.data, sv.len);
 }
 
-String String_from_cstr(const char* s) {
+String String_from_cstr(const byte* s) {
   String sb = {0};
   String_append_cstr(&sb, s);
   return sb;
@@ -538,7 +537,7 @@ String String_from_cstr(const char* s) {
 
 #define SB(cstr) String_from_cstr((cstr)) 
 
-String cstr_heap_to_String(char** s) {
+String cstr_heap_to_String(byte** s) {
   return array_heap_to_String(s, strlen(*s));
 }
 
@@ -546,15 +545,15 @@ String String_from_str(str s) {
   return String_from_array(s.data, s.len);
 }
 
-char* String_to_cstr(String sb) {
+byte* String_to_cstr(String sb) {
   return str_to_cstr(String_to_tmp_str(sb));
 }
 
-static const size_t TMP_DEFAULT_LEN = 1024;
+static const isize TMP_DEFAULT_LEN = 1024;
 static __thread String tmp_sb = {0};
 
 // https://nullprogram.com/blog/2023/02/13/
-char* str_fmt_tmp(const char* fmt, ...) {
+byte* str_fmt_tmp(const byte* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   int real_size = vsnprintf(NULL, 0, fmt, args);
@@ -574,7 +573,7 @@ char* str_fmt_tmp(const char* fmt, ...) {
 }
 
 // returns itself
-String String_append_fmt(String* sb, const char* fmt, ...) {
+String String_append_fmt(String* sb, const byte* fmt, ...) {
   // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
   // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
 
@@ -599,7 +598,7 @@ String String_append_fmt(String* sb, const char* fmt, ...) {
 
 // returns itself
 String String_readline_stdin(String* sb) {
-  char* res = fgets(sb->data, sb->cap, stdin);
+  byte* res = fgets(sb->data, sb->cap, stdin);
   if (res == NULL || ferror(stdin) != 0) sb->len = 0;
   else sb->len = strlen(sb->data);
   return *sb;
@@ -649,7 +648,7 @@ String str_concat(String a, String b) {
 }
 
 // returns itself
-String str_repeat(String* sb, str sv, size_t n) {
+String str_repeat(String* sb, str sv, isize n) {
   sb->len = 0;
   String_reserve(sb, sv.len * n);
   while (n-- > 0) String_append_str(sb, sv);
@@ -657,7 +656,7 @@ String str_repeat(String* sb, str sv, size_t n) {
   return *sb;
 }
 
-#define strforeach(c, s) listforeach(const char, c, s)
+#define strforeach(c, s) listforeach(const byte, c, s)
 
 // returns itself
 String str_to_upper(String* sb, str sv) {
@@ -739,12 +738,12 @@ String str_join(String* sb, str join, StrList strs) {
   sb->len = 0;
   if (strs.len == 0) { return *sb; }
 
-  size_t size = 0;
+  isize size = 0;
   listforeach(str, s, &strs) size += s->len;
   size += join.len * (strs.len-1);
   String_reserve(sb, size);
 
-  for(size_t i=0; i<strs.len-1; ++i) {
+  for(isize i=0; i<strs.len-1; ++i) {
     String_append_str(sb, strs.data[i]);
     String_append_str(sb, join);
   }
