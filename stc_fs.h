@@ -105,11 +105,13 @@ bool file_close(FILE* f) {
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
 
+// TODO: opening a directory hangs on Linux
 bool file_read_to_string(String* sb, const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) {
     return false;
   }
+  printf("File opened\n");
 
   if (fseek(f, 0, SEEK_END) != 0) {
     #ifdef STC_LOG_ERR
@@ -118,6 +120,7 @@ bool file_read_to_string(String* sb, const char* path) {
     file_close(f);
     return false;
   }
+  printf("File seeked to end\n");
 
   // TODO: wont work on files bigger than 2gigs
   isize file_size = ftell(f);
@@ -128,6 +131,7 @@ bool file_read_to_string(String* sb, const char* path) {
     file_close(f);
     return false;
   }
+  printf("File size = %ld\n", file_size);
 
   if (fseek(f, 0, SEEK_SET) != 0) {
     #ifdef STC_LOG_ERR
@@ -136,10 +140,13 @@ bool file_read_to_string(String* sb, const char* path) {
     file_close(f);
     return false;
   }
+  printf("File seeked to start = %ld\n", file_size);
 
   String_reserve(sb, file_size);
   isize read = fread(sb->data, 1, file_size, f);
   sb->len = read;
+
+  printf("File readed\n");
 
   #ifdef STC_LOG_ERR
   if (read != file_size) {
@@ -148,6 +155,7 @@ bool file_read_to_string(String* sb, const char* path) {
   #endif
 
   file_close(f);
+  printf("File readed and closed\n");
   return read == file_size;
 }
 
@@ -488,7 +496,9 @@ bool dir_close(DirIter* it) {
 
 DirEntry* dir_read(DirIter* it) {
 #ifndef _WIN32
+  #ifdef STC_LOG_ERR
   int prev_err = errno;
+  #endif
   struct dirent* dp;
   char* filename;
 
@@ -836,8 +846,9 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
   #ifdef STC_LOG_ERR
   if (!res) fs_err_print(src);
   #endif
-  return res;
 #endif
+
+  return res;
 }
 
 bool file_delete(const char* src) {
