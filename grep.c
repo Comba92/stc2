@@ -4,30 +4,31 @@
 
 int main(int argc, char** argv) {
   if (argc < 3) {
-    printf("Missing args\n");
+    printf("Missing args query filepath\n");
     return 0;
   }
   
   char* query = argv[1];
   char* path  = argv[2];
 
-  char* contents = file_read_to_string(path);
-  if (contents == NULL) return 0;
+  String contents = {0};
+  bool res = file_read_to_string(&contents, path);
+  if (!res) return 0;
 
   str query_str = str_from_cstr(query);
-  str contents_str = str_from_cstr(contents);
+  str contents_str = String_to_tmp_str(contents);
 
-  StrList lines = str_lines_collect(contents_str);
+  StrLines it = str_lines(contents_str);
   String lower = {0};
-  listforeach(str, line, &lines) {
-    str_to_lower(&lower, *line);
-    int i = str_match(String_to_str(lower), query_str);
+  while(str_has_line(&it)) {
+    str line = str_next_line(&it);
+    str_to_lower(&lower, line);
+    int i = str_match(String_to_tmp_str(lower), query_str);
     if (i != -1) {
-      printf(str_fmt "\n", str_arg(*line));
+      printf(str_fmt "\n", str_arg(line));
     }
   }
-  
-  StrList_free(&lines);
+
   String_free(&lower);
-  free(contents);
+  String_free(&contents);
 }

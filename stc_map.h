@@ -227,11 +227,11 @@ name##Iter name##_iter(const name* m) { \
   return it; \
 }  \
  \
-bool name##_has(name##Iter* it) { \
+bool name##_iter_has(name##Iter* it) { \
   return it->curr != NULL; \
 } \
  \
-name##Entry* name##_next(name##Iter* it) { \
+name##Entry* name##_iter_next(name##Iter* it) { \
   if (it->curr == NULL) return NULL; \
  \
   isize i; \
@@ -243,8 +243,8 @@ name##Entry* name##_next(name##Iter* it) { \
   return e; \
 } \
 
-#define map_iter(type, ent, it) for(type##Entry* ent; (ent = type##_next(it)) != NULL;)
-#define set_iter(ent, it) for(str* ent; (ent = Set_next(it)) != NULL)
+#define map_iter(type, ent, it) for(type##Entry* ent; (ent = type##_iter_next(it)) != NULL;)
+#define set_iter(ent, it) for(str* ent; (ent = Set_iter_next(it)) != NULL)
 
 // TODO: wouldn't it be more effficient to store u32 or u64 for bits?
 
@@ -403,11 +403,11 @@ SetIter Set_iter(const Set* s) {
   return it;
 }
 
-bool Set_has(const SetIter* s) {
+bool Set_iter_has(const SetIter* s) {
   return s->curr != NULL;
 }
 
-str* Set_next(SetIter* it) {
+str* Set_iter_next(SetIter* it) {
   if (it->curr == NULL) return NULL;
 
   int i;
@@ -424,7 +424,7 @@ bool Set_is_superset(const Set* this, const Set* other) {
   SetIter other_it  = Set_iter(other);
 
   // this should have at least ALL elements of other
-  for(str* other_e; (other_e = Set_next(&other_it)) != NULL;) {
+  for(str* other_e; (other_e = Set_iter_next(&other_it)) != NULL;) {
     // if this doesn't contain an element of other, this it is not a superset
     if (!Set_contains(this, *other_e)) return false;
   }
@@ -438,7 +438,7 @@ bool Set_is_subset(const Set* this, const Set* other) {
   SetIter this_it  = Set_iter(this);
 
   // ALL this elements should ALWAYS be in other
-  for(str* this_e; (this_e = Set_next(&this_it)) != NULL;) {
+  for(str* this_e; (this_e = Set_iter_next(&this_it)) != NULL;) {
     // if other doesn't contain an element of this, this it is not a subset
     if (!Set_contains(other, *this_e)) return false;
   }
@@ -453,7 +453,7 @@ bool Set_is_disjoint(const Set* this, const Set* other) {
   SetIter this_it  = Set_iter(this);
 
   // all elements should be different
-  for(str* this_e; (this_e = Set_next(&this_it)) != NULL;) {
+  for(str* this_e; (this_e = Set_iter_next(&this_it)) != NULL;) {
     // if an element of this is contained in other, they are not disjoint
     if (Set_contains(other, *this_e)) return false;
   }

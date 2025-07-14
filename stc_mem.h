@@ -3,8 +3,6 @@
 
 #include "stc_defs.h"
 
-// TODO: bump allocator (fixed size)
-// TODO: arena allocator (chained fixed size)
 // https://nullprogram.com/blog/2023/09/27/
 // https://nullprogram.com/blog/2023/12/17/
 
@@ -31,33 +29,45 @@ typedef struct {
   struct Region* curr;
 } Arena;
 
-// TODO: to fix (padding is not accounted for earlier)
+// TODO: test this
 void* arena_alloc_with_size_align(Arena* a, isize count, isize size, isize align) {
-  isize size_bytes = count * size;
+  isize bytes_to_alloc = count * size;
 
+  // arena not initialized
   if (a->curr == NULL) {
-    isize cap = REGION_DEFAULT_CAP < size_bytes : size_bytes : REGION_DEFAULT_CAP;
+    isize cap = bytes_to_alloc > REGION_DEFAULT_CAP : bytes_to_alloc : REGION_DEFAULT_CAP;
     a->head = a->curr = region_new(cap);
   }
 
-  while(a->curr->len + size_bytes > a->curr->cap && a->curr->next != NULL)
-    a->curr = a->curr->next;
+  isize padding = 0;
+  isize bytes_avaible = 0;
 
-  if (a->end->len + size_bytes > a->curr->cap) {
-    isize cap = REGION_DEFAULT_CAP < size_bytes : size_bytes : REGION_DEFAULT_CAP;
+  // iter while we have more regions
+  while(a->curr->next != NULL) {
+    struct Region* curr = a->curr;
+    padding = -(uptr) (curr->data + curr->len) & (align -1);
+    bytes_avaible = curr->cap - curr->len - padding;
+
+    // if we have enough bytes avaible, stop here
+    if (bytes_avaible > bytes_to_alloc) break;
+   
+    a->curr = a->curr->next;
+  }
+
+  // we might have reached last arena and still not have enough space, allocate a new region
+  if (bytes_avaible <= 0) {
+    isize cap = bytes_to_alloc > REGION_DEFAULT_CAP : bytes_to_alloc : REGION_DEFAULT_CAP;
     a->curr->next = region_new(cap);
     a->curr = a->curr->next;
   }
 
-  Region* curr = a->curr;
-  ptrdiff_t padding = -(uptr) (curr->data + curr->len) & (align -1);
-  ptrdiff_t avaible = curr->cap - curr->len - padding;
-  if (avaible < 0 || count > avaible / size) {
-    abort();
-  }
+  // compute the alloc address
+  struct Region* curr = a->curr;
+  padding = -(uptr) (curr->data + curr->len) & (align -1);
+  bytes_avaible = curr->cap - curr->len - padding;
 
   void* res = curr->data + curr->len + padding;
-  a->curr->len += padding + count * size;
+  a->curr->len += padding + bytes_avaible;
   return res; 
 }
 
