@@ -20,6 +20,8 @@ static const isize LIST_DEFAULT_CAP = 16;
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
 // TODO: list_repeat() and list_fill()
 
+// TODO: two different list_defs: one for minimal functionality and one for full
+
 #define list_def(type, name) \
 typedef struct { \
   isize len, cap; \

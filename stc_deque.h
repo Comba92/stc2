@@ -21,7 +21,6 @@ void deque_reserve(Deque* d, isize new_cap) {
   if (new_cap > d->cap) {
     d->cap = d->cap == 0 ? 16 : d->cap;
 
-    isize cap = d->cap;
     while (new_cap > d->cap) d->cap *= 2;
     d->data = realloc(d->data, sizeof(int) * d->cap);
     assert(d->data != NULL && "deque realloc failed");
@@ -95,17 +94,17 @@ int deque_pop_front(Deque* d) {
   return value;
 }
 
-int deque_real_idx(Deque* d, isize i) {
+int deque_idx(Deque* d, isize i) {
   assert(i < d->len && "deque access out of bounds");
   return (d->front + i) & (d->cap - 1);
 }
 
 int* deque_get(Deque* d, isize i) {
-  return &d->data[deque_real_idx(d, i)];
+  return &d->data[deque_idx(d, i)];
 }
 
 void deque_set(Deque* d, isize i, int value) {
-  d->data[deque_real_idx(d, i)] = value;
+  d->data[deque_idx(d, i)] = value;
 }
 
 int deque_back(Deque* d) {
@@ -122,35 +121,12 @@ int deque_front(Deque* d) {
 }
 
 void deque_swap(Deque* d, isize a, isize b) {
-  int left = deque_get(d, a);
-  int right = deque_get(d, b);
-  int tmp = left;
-  deque_set(d, a, right);
+  int *left = deque_get(d, a);
+  int *right = deque_get(d, b);
+  int tmp = *left;
+  deque_set(d, a, *right);
   deque_set(d, b, tmp);
 }
-
-// TODO: this is confusing
-// void deque_append_front(Deque* d, int* data, isize len) {
-//   isize old_cap;
-//   deque_reserve(d, d->len + len);
-//   int remaining = len;
-//   if (d->front >= d->back) {
-//     // right part
-//     memcpy(
-//       d->data + d->front - len, 
-//       d->data + d->front,
-//       (old_cap - d->front) * sizeof(int)
-//     );
-//     remaining -= (old_cap - d->front);
-//   }
-//   if (remaining > 0) {
-//     // left part
-//     memcpy(d->data);
-//   }
-
-//   d->len += len;
-//   d->front -= len;
-// }
 
 void deque_append_back(Deque* d, int* data, isize len) {
   deque_reserve(d, d->len + len);
@@ -183,11 +159,12 @@ Deque deque_from_array(int* data, isize len) {
 
 void deque_free(Deque* d) {
   free(d->data);
-  d->len = 0;
-  d->cap = 0;
+  d->len = d->cap = d->front = d->back = 0;
   d->data = NULL;
 }
 
+
+// https://en.wikipedia.org/wiki/Binary_heap
 typedef struct {
   isize cap, len;
   int* data;
@@ -195,7 +172,7 @@ typedef struct {
 
 void bheap_reserve(BinaryHeap* b, isize new_cap) {
   if (new_cap > b->cap) {
-    b->cap = b->cap == 0 ? LIST_DEFAULT_CAP : b->cap;
+    b->cap = b->cap == 0 ? 16 : b->cap;
     while (new_cap > b->cap) b->cap *= 2;
 
     b->data = realloc(b->data, sizeof(int) * b->cap);
@@ -203,34 +180,47 @@ void bheap_reserve(BinaryHeap* b, isize new_cap) {
   }
 }
 
-isize bheap_left_child(isize i) {
-  return 2*i + 1;
+#define BHEAP_LEFT(i) (2*(i) + 1)
+#define BHEAP_RIGHT(i) (2*(i) + 2)
+#define BHEAP_PARENT(i) (((i)-1) / 2) 
+
+void bheap_swap(BinaryHeap* h, isize a, isize b) {
+  assert(a < h->len && "bheap access out of bounds");
+  assert(b < h->len && "bheap access out of bounds");
+  int tmp = h->data[a];
+  h->data[a] = h->data[b];
+  h->data[b] = tmp;
 }
 
-isize bheap_right_child(isize i) {
-  return 2*i + 2;
-}
-
-isize bheap_parent(isize i) {
-  return i / 2;
-}
- 
 void bheap_push(BinaryHeap* b, int val) {
   bheap_reserve(b, b->len+1);
   
   b->data[b->len++] = val;
   if (b->len == 1) return;
-
-  isize curr = b->len;
-  isize parent = curr / 2;
-  while (parent > 0 && b->data[curr] > b->data[parent]) {
-    // TODO: replace with swap
-    int tmp = b->data[curr];
-    b->data[curr] = b->data[parent];
-    b->data[parent] = tmp;
-
+  
+  isize curr = b->len-1;
+  isize parent = BHEAP_PARENT(curr);
+  while (curr > 0 && b->data[curr] > b->data[parent]) {
+    bheap_swap(b, curr, parent);
     curr = parent;
-    parent = curr / 2;
+    parent = BHEAP_PARENT(curr);
+  }
+}
+
+void bheap_heapify(BinaryHeap* b, isize root) {
+  isize curr = root;
+  
+  while (true) {
+    isize left  = BHEAP_LEFT(curr);
+    isize right = BHEAP_RIGHT(curr);
+
+    isize largest = curr;
+    if (left  < b->len && b->data[left]  > b->data[largest]) largest = left;
+    if (right < b->len && b->data[right] > b->data[largest]) largest = right;
+    if (largest != curr) {
+      bheap_swap(b, curr, largest);
+      curr = largest;
+    } else break;
   }
 }
 
@@ -241,31 +231,25 @@ int bheap_pop(BinaryHeap* b) {
   if (b->len == 0) return res;
 
   b->data[0] = b->data[b->len];
-  isize curr = 0;
-  isize left  = 2*curr + 1;
-  isize right = 2*curr + 2;
-  while (curr < b->len) {
-    isize largest = curr;
-    if (left  < b->len && b->data[left]  > b->data[largest]) largest = left;
-    if (right < b->len && b->data[right] > b->data[largest]) largest = right;
-    if (largest != curr) {
-      // TODO: replace with swap
-      int tmp = b->data[curr];
-      b->data[curr] = b->data[largest];
-      b->data[largest] = tmp;
-      curr = largest;
-    } else break;
-  }
+  bheap_heapify(b, 0);
+
+  return res;
 }
 
 int bheap_push_pop(BinaryHeap* b, int val) {
-
+  if (b->len == 0 || b->data[0] > val) return val;
+ 
+  int res = b->data[0];
+  b->data[b->len] = val;
+  bheap_swap(b, 0, b->len);
+  bheap_heapify(b, 0);
+  return res;
 }
 
-int bheap_delete(BinaryHeap* b, int val) {
-
-}
-
-BinaryHeap bheap_from_list() {
-  
+BinaryHeap bheap_from_array(const int* arr, isize arr_len) {
+  isize start = arr_len / 2 - 1;
+  BinaryHeap b = {0};
+  memcpy(b.data, arr, arr_len * sizeof(int));
+  for(isize i=start; i >= 0; --i) bheap_heapify(&b, i);
+  return b;
 }

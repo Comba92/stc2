@@ -8,6 +8,7 @@
 #include <string.h>
 #include <assert.h>
 
+// https://nrk.neocities.org/articles/isdigit-multi-implementation#info-ref-0
 bool c_is_space(byte c) {
   switch (c) {
     case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': return true;
