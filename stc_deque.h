@@ -187,3 +187,85 @@ void deque_free(Deque* d) {
   d->cap = 0;
   d->data = NULL;
 }
+
+typedef struct {
+  isize cap, len;
+  int* data;
+} BinaryHeap;
+
+void bheap_reserve(BinaryHeap* b, isize new_cap) {
+  if (new_cap > b->cap) {
+    b->cap = b->cap == 0 ? LIST_DEFAULT_CAP : b->cap;
+    while (new_cap > b->cap) b->cap *= 2;
+
+    b->data = realloc(b->data, sizeof(int) * b->cap);
+    assert(b->data != NULL && "bheap realloc failed");
+  }
+}
+
+isize bheap_left_child(isize i) {
+  return 2*i + 1;
+}
+
+isize bheap_right_child(isize i) {
+  return 2*i + 2;
+}
+
+isize bheap_parent(isize i) {
+  return i / 2;
+}
+ 
+void bheap_push(BinaryHeap* b, int val) {
+  bheap_reserve(b, b->len+1);
+  
+  b->data[b->len++] = val;
+  if (b->len == 1) return;
+
+  isize curr = b->len;
+  isize parent = curr / 2;
+  while (parent > 0 && b->data[curr] > b->data[parent]) {
+    // TODO: replace with swap
+    int tmp = b->data[curr];
+    b->data[curr] = b->data[parent];
+    b->data[parent] = tmp;
+
+    curr = parent;
+    parent = curr / 2;
+  }
+}
+
+int bheap_pop(BinaryHeap* b) {
+  assert(b->len > 0 && "popping empty bheap");
+
+  int res = b->data[b->len--];
+  if (b->len == 0) return res;
+
+  b->data[0] = b->data[b->len];
+  isize curr = 0;
+  isize left  = 2*curr + 1;
+  isize right = 2*curr + 2;
+  while (curr < b->len) {
+    isize largest = curr;
+    if (left  < b->len && b->data[left]  > b->data[largest]) largest = left;
+    if (right < b->len && b->data[right] > b->data[largest]) largest = right;
+    if (largest != curr) {
+      // TODO: replace with swap
+      int tmp = b->data[curr];
+      b->data[curr] = b->data[largest];
+      b->data[largest] = tmp;
+      curr = largest;
+    } else break;
+  }
+}
+
+int bheap_push_pop(BinaryHeap* b, int val) {
+
+}
+
+int bheap_delete(BinaryHeap* b, int val) {
+
+}
+
+BinaryHeap bheap_from_list() {
+  
+}
