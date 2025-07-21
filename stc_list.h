@@ -18,7 +18,6 @@ static const isize LIST_DEFAULT_CAP = 16;
 // TODO: not sure if i want insert and remove
 // TODO: array_heap_to_list() is extremely dangerous
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
-// TODO: list_repeat() and list_fill()
 
 // TODO: two different list_defs: one for minimal functionality and one for full
 
@@ -118,21 +117,6 @@ type name##_remove_swap(name* l, isize i) { \
   return res; \
 } \
  \
-typedef isize (*name##CmpFn)(const type* a, const type* b); \
-isize name##_find(const name* l, type value, name##CmpFn pred) { \
-  const type* b = (const type*) &value; \
-  listfor(isize, i, l) { \
-    const type* a = (const type*) &l->data[i]; \
-    if (pred(a, b) == 0) return i; \
-  } \
- \
-  return -1; \
-} \
- \
-bool name##_contains(const name* l, type value, name##CmpFn pred) { \
-  return name##_find(l, value, pred) != -1; \
-} \
- \
 name name##_reverse(name* l) { \
   for(isize left=0, right=l->len-1; left<right; ++left, --right) { \
     name##_swap(l, left, right); \
@@ -176,6 +160,21 @@ void name##_free(name* l) { \
   l->cap = 0; \
   l->len = 0; \
   l->data = NULL; \
+} \
+ \
+typedef isize (*name##CmpFn)(const type* a, const type* b); \
+isize name##_find(const name* l, type value, name##CmpFn pred) { \
+  const type* b = (const type*) &value; \
+  listfor(isize, i, l) { \
+    const type* a = (const type*) &l->data[i]; \
+    if (pred(a, b) == 0) return i; \
+  } \
+ \
+  return -1; \
+} \
+ \
+bool name##_contains(const name* l, type value, name##CmpFn pred) { \
+  return name##_find(l, value, pred) != -1; \
 } \
  \
 bool name##_is_sorted(const name* l, name##CmpFn pred) { \
@@ -230,7 +229,7 @@ name name##_filter(name* l, name##EqFn pred) { \
 } \
  \
 name name##_dedup(name* l, name##CmpFn pred) { \
-  if (! name##_is_sorted(l, pred)) name##_sort(l, pred); \
+  if (!name##_is_sorted(l, pred)) name##_sort(l, pred); \
   isize curr = 0; \
   for (isize i=0; i<l->len-1; ++i) { \
     const type* a = (const type*) &l->data[i]; \

@@ -20,4 +20,12 @@ typedef uintptr_t uptr;
 typedef ptrdiff_t isize;
 typedef size_t    usize;
 
+#define IsBetween(x, lower, upper) (((lower) <= (x)) && ((x) <= (upper)))
+#define BitNth(x) (1 << (x))
+#define BitIsSet(n, x) ((n) & BitNth(x))
+
+#define FlagSet(n, f) ((n) |= (f))
+#define FlagClear(n, f) ((n) &= -(f))
+#define FlagToggle(n, f) ((n) ^= (f))
+
 #endif
