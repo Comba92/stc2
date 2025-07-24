@@ -24,7 +24,17 @@
   #define PATH_MAX_LEN MAX_PATH
   
   #include <sys/stat.h>
+  #define fileno _fileno
   #define stat _stati64
+  #define fstat _fstati64
+  #define ftell _ftelli64
+  #define fseek _fseeki64
+#endif
+
+#ifdef STC_LOG_ERR
+#define LOG_ERR(cond, msg) if ((cond)) fs_err_print((msg));
+#else
+#define LOG_ERR(cond, msg)
 #endif
 
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
@@ -78,9 +88,7 @@ void fs_err_print(const char* msg) {
 
 static FILE* file_open(const char* path, const char* opts) {
   FILE* f = fopen(path, opts);
-  #ifdef STC_LOG_ERR
-  if (f == NULL) fs_err_print(path);
-  #endif
+  LOG_ERR(f == NULL, path)
   return f;
 }
 
@@ -94,10 +102,8 @@ FILE* file_open_write(const char* path) {
 }
 
 bool file_close(FILE* f) {
-  bool res = fclose(f) != 0;
-  #ifdef STC_LOG_ERR
-    if (!res) fs_err_print(str_fmt_tmp("File descriptor %d", fileno(f)));
-  #endif
+  bool res = fclose(f) == 0;
+  LOG_ERR(!res, str_fmt_tmp("File descriptor %d", fileno(f)))
   return res;
 }
 
@@ -105,58 +111,48 @@ bool file_close(FILE* f) {
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
 
-// TODO: opening a directory hangs on Linux
 bool file_read_to_string(String* sb, const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) {
     return false;
   }
-  printf("File opened\n");
 
-  if (fseek(f, 0, SEEK_END) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
-    file_close(f);
+  // ftell is broken on linux for directories, also we are iterating the file back and forth
+  // if (fseek(f, 0, SEEK_END) != 0) {
+  //   LOG_ERR(true, path)
+  //   file_close(f);
+  //   return false;
+  // }
+
+  // isize file_size = ftell(f);
+  // // for some reason, this has to be done on linux when opening folders
+  // if (file_size < 0 || (int) file_size == -1) {
+  //   LOG_ERR(true, path)
+  //   file_close(f);
+  //   return false;
+  // }
+
+  // if (fseek(f, 0, SEEK_SET) != 0) {
+  //   LOG_ERR(true, path)
+  //   file_close(f);
+  //   return false;
+  // }
+
+  struct stat buf;
+  if (fstat(fileno(f), &buf) != 0) {
+    LOG_ERR(true, path)
     return false;
   }
-  printf("File seeked to end\n");
 
-  // TODO: wont work on files bigger than 2gigs
-  isize file_size = ftell(f);
-  if (file_size < 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
-    file_close(f);
-    return false;
-  }
-  printf("File size = %ld\n", file_size);
-
-  if (fseek(f, 0, SEEK_SET) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
-    file_close(f);
-    return false;
-  }
-  printf("File seeked to start = %ld\n", file_size);
-
-  String_reserve(sb, file_size);
-  isize read = fread(sb->data, 1, file_size, f);
+  usize size = buf.st_size;
+  String_reserve(sb, size);
+  isize read = fread(sb->data, 1, size, f);
   sb->len = read;
 
-  printf("File readed\n");
-
-  #ifdef STC_LOG_ERR
-  if (read != file_size) {
-    fs_err_print(path);
-  }
-  #endif
+  LOG_ERR(read != size, path)
 
   file_close(f);
-  printf("File readed and closed\n");
-  return read == file_size;
+  return read == size;
 }
 
 bool file_write_bytes(const char* path, const char* data, isize len) {
@@ -164,11 +160,7 @@ bool file_write_bytes(const char* path, const char* data, isize len) {
   isize wrote = fwrite(data, 1, len, fd);
   bool res = wrote != len;
 
-  #ifdef STC_LOG_ERR
-  if (!res) {
-    fs_err_print(path);
-  }
-  #endif
+  LOG_ERR(!res, path)
 
   return file_close(fd) && res;
 }
@@ -222,9 +214,7 @@ char* path_to_absolute(String* sb, const char* path) {
   // https://man7.org/linux/man-pages/man3/realpath.3.html
   char* res = realpath(path, sb->data);
   if (res == NULL) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get absolute path for relative path %s", path))
     return sb->data;
   }
 
@@ -233,18 +223,14 @@ char* path_to_absolute(String* sb, const char* path) {
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
   DWORD path_len = GetFullPathName(path, 0, NULL, NULL);
   if (path_len == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get absolute path length for relative path %s", path));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get absolute path for relative path %s", path))
     return sb->data;
   }
 
   String_reserve(sb, path_len);
   DWORD res = GetFullPathName(path, path_len, sb->data, NULL);
   if (res == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get absolute path for relative path %s", path));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get absolute path for relative path %s", path))
     return sb->data;
   }
 
@@ -349,9 +335,7 @@ char* dir_current(String* sb) {
   // https://man7.org/linux/man-pages/man3/getcwd.3.html
   char* res = getcwd(sb->data, PATH_MAX_LEN);
   if (res == NULL) { 
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get working directory"));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get working directory"))
     String_append_cstr(sb, "");
     return sb->data;
   }
@@ -362,18 +346,14 @@ char* dir_current(String* sb) {
   isize path_len = GetCurrentDirectory(0, NULL);
 
   if (path_len == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get working directory"));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get working directory"))
     return sb->data;
   }
   
   sb->len = 0;
   String_reserve(sb, path_len);
   if (GetCurrentDirectory(path_len, sb->data) == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(str_fmt_tmp("Failed to get working directory"));
-    #endif
+    LOG_ERR(true, str_fmt_tmp("Failed to get working directory"))
     String_append_cstr(sb, "");
     return sb->data;
   }
@@ -392,10 +372,7 @@ bool dir_set_current(const char* path) {
 #else
   bool res = SetCurrentDirectory(path) != 0;
 #endif
-
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Failed to set working directory"));
-  #endif
+  LOG_ERR(!res, str_fmt_tmp("Failed to set working directory"))
   return res;
 }
 
@@ -435,21 +412,11 @@ bool dir_scanning(const DirIter* it) {
 DirIter dir_open(const char* dirpath) {
 #ifndef _WIN32
   int dir_fd = open(dirpath, O_RDONLY, O_DIRECTORY);
-
-  #ifdef STC_LOG_ERR
-  if (dir_fd == -1) {
-    fs_err_print(dirpath);
-  }
-  #endif
+  LOG_ERR(dir_fd == -1, dirpath)
 
   // https://man7.org/linux/man-pages/man3/fdopendir.3p.html
   DIR* dir = fdopendir(dir_fd);
-
-  #ifdef STC_LOG_ERR
-  if (dir == NULL) {
-    fs_err_print(dirpath);
-  }
-  #endif
+  LOG_ERR(dir == NULL, dirpath)
 
   bool had_error = dir_fd == -1 || dir == NULL;
   DirIter it = { dir_fd, dir, had_error, had_error ? 1 : 0 };
@@ -464,12 +431,7 @@ DirIter dir_open(const char* dirpath) {
   // HANDLE h = FindFirstFile(buf, &data);
   // this should be faster than FindFirstFile()
   HANDLE h = FindFirstFileEx(buf, FindExInfoBasic, &data, FindExSearchNameMatch, NULL, 0);
-
-  #ifdef STC_LOG_ERR
-  if (h == INVALID_HANDLE_VALUE) {
-    fs_err_print(dirpath);
-  }
-  #endif
+  LOG_ERR(h == INVALID_HANDLE_VALUE, dirpath)
 
   bool had_error = h == INVALID_HANDLE_VALUE;
   DirIter it = { data, h, had_error, had_error ? 1 : 0 };
@@ -480,14 +442,10 @@ DirIter dir_open(const char* dirpath) {
 bool dir_close(DirIter* it) {
 #ifndef _WIN32
   bool res = closedir(it->dir) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Closing dir descriptor %d", it->dir_fd));
-  #endif
+  LOG_ERR(!res, str_fmt_tmp("Closing dir descriptor %d", it->dir_fd))
 #else
   bool res = FindClose(it->h) != 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(str_fmt_tmp("Closing dir handle %p", it->h));
-  #endif
+  LOG_ERR(!res, str_fmt_tmp("Closing dir handle %p", it->h))
 #endif
   it->finished = true;
   return res;
@@ -526,9 +484,7 @@ DirEntry* dir_read(DirIter* it) {
   struct stat statbuf;
   int fd = openat(it->dir_fd, filename, O_RDONLY);
   if (fstat(fd, &statbuf) != 0) {
-    #ifdef STC_LOG_ERR
-      fs_err_print(str_fmt_tmp(filename));
-    #endif
+    LOG_ERR(true, str_fmt_tmp(filename))
 
     it->err_count += 1;
     it->curr.name = "";
@@ -546,11 +502,7 @@ DirEntry* dir_read(DirIter* it) {
     default: it->curr.type = FileType_Other; break;
   }
 
-  if (close(fd) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(it->curr.name);
-    #endif
-  };
+  close(fd);
 #else
   char* filename;
   bool is_special_entry = false;
@@ -561,11 +513,7 @@ DirEntry* dir_read(DirIter* it) {
 
     // no more files left
     if (!res) {
-      #ifdef STC_LOG_ERR
-      if (GetLastError() != ERROR_NO_MORE_FILES) {
-        fs_err_print(str_fmt_tmp("Dir handle %p", it->h));
-      }
-      #endif
+      LOG_ERR(GetLastError() != ERROR_NO_MORE_FILES, str_fmt_tmp("Dir handle %p", it->h))
 
       dir_close(it);
       return NULL;
@@ -655,9 +603,7 @@ FileType file_type(const char* path) {
 #ifndef _WIN32
   struct stat buf;
   if (stat(path, &buf) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
+    LOG_ERR(true, path)
     return FileType_Other;
   }
   
@@ -670,9 +616,7 @@ FileType file_type(const char* path) {
 #else
   DWORD attribs = GetFileAttributes(path);
   if (attribs == INVALID_FILE_ATTRIBUTES) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
+    LOG_ERR(true, path)
     return FileType_Other;
   }
 
@@ -686,9 +630,7 @@ FileType file_type(const char* path) {
 isize file_size(const char* path) {
   struct stat buf;
   if (stat(path, &buf) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
+    LOG_ERR(true, path)
     return -1;
   }
 
@@ -703,10 +645,7 @@ bool dir_create(const char* path) {
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createdirectorya?redirectedfrom=MSDN
   bool res = CreateDirectory(path, NULL) != 0;
 #endif
-
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(path);
-  #endif
+  LOG_ERR(!res, path)
   return res;
 }
 
@@ -742,9 +681,7 @@ bool file_create(const char* path, bool overwrite) {
   // int fd = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
 
   if (fd == -1 || close(fd) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
+    LOG_ERR(true, path)
     return false;
   }
 #else
@@ -753,9 +690,7 @@ bool file_create(const char* path, bool overwrite) {
   HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, flags, FILE_ATTRIBUTE_NORMAL, NULL);
 
   if (h == INVALID_HANDLE_VALUE || CloseHandle(h) == 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(path);
-    #endif
+    LOG_ERR(true, path)
     return false;
   }
 #endif
@@ -780,9 +715,7 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
 
   struct stat statbuf;
   if (fstat(src_fd, &statbuf) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(src);
-    #endif
+    LOG_ERR(true, src)
     return false;
   }
   isize src_size = statbuf.st_size;
@@ -798,23 +731,17 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
   // https://man7.org/linux/man-pages/man2/sendfile.2.html
   if (sendfile(dst_fd, src_fd, NULL, src_size) == -1) {
   // if (copy_file_range(src_fd, NULL, dst_fd, NULL, src_size, 0) == -1) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(dst);
-    #endif
+    LOG_ERR(true, dst)
     return false;
   }
 
   if (close(src_fd) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(src);
-    #endif
+    LOG_ERR(true, src)
     return false;
   }
 
   if (close(dst_fd) != 0) {
-    #ifdef STC_LOG_ERR
-    fs_err_print(dst);
-    #endif
+    LOG_ERR(true, dst)
     return false;
   }
 
@@ -823,9 +750,7 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
   // https://learn.microsoft.com/it-it/windows/win32/api/winbase/nf-winbase-copyfile
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-copyfileexa
   BOOL res = CopyFile(src, dst, !overwrite);
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(dst);
-  #endif
+  LOG_ERR(!res, dst)
   return res;
 #endif
 }
@@ -835,17 +760,13 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
   if (!overwrite && path_exists(dst)) return false;
 
   int res = rename(src, dst) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
+  LOG_ERR(!res, src)
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefile
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa
   DWORD flags = overwrite ? MOVEFILE_REPLACE_EXISTING : 0;
   bool res = MoveFileEx(src, dst, MOVEFILE_COPY_ALLOWED | flags) != 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
+  LOG_ERR(!res, src)
 #endif
 
   return res;
@@ -853,9 +774,7 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
 
 bool file_delete(const char* src) {
   int res = remove(src) == 0;
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(src);
-  #endif
+  LOG_ERR(!res, src)
   return res;
 }
 
@@ -921,11 +840,7 @@ bool dir_delete(const char* path) {
   // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-removedirectorya
   bool res = RemoveDirectory(path) != 0;
 #endif
-
-  #ifdef STC_LOG_ERR
-  if (!res) fs_err_print(path);
-  #endif
-
+  LOG_ERR(!res, path)
   return res;
 }
 
