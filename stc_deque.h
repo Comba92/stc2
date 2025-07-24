@@ -163,6 +163,8 @@ void deque_free(Deque* d) {
   d->data = NULL;
 }
 
+// TODO: generalize with macro
+// this will need a generic cmp function
 
 // https://en.wikipedia.org/wiki/Binary_heap
 typedef struct {
@@ -217,10 +219,9 @@ void bheap_heapify(BinaryHeap* b, isize root) {
     isize largest = curr;
     if (left  < b->len && b->data[left]  > b->data[largest]) largest = left;
     if (right < b->len && b->data[right] > b->data[largest]) largest = right;
-    if (largest != curr) {
-      bheap_swap(b, curr, largest);
-      curr = largest;
-    } else break;
+    if (largest == curr) break;
+    bheap_swap(b, curr, largest);
+    curr = largest;
   }
 }
 

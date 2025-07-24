@@ -9,76 +9,79 @@
 #include <assert.h>
 
 // https://nrk.neocities.org/articles/isdigit-multi-implementation#info-ref-0
-bool c_is_space(byte c) {
+bool c_is_space(char c) {
   switch (c) {
     case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': return true;
     default: return false;
   }
 }
-bool c_is_alpha(byte c) {
+bool c_is_alpha(char c) {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
-bool c_is_digit(byte c) {
+bool c_is_digit(char c) {
   return c >= '0' && c <= '9';
 }
-bool c_is_alphanum(byte c) {
+bool c_is_alphanum(char c) {
   return c_is_alpha(c) || c_is_digit(c);
 }
-bool c_is_punct(byte c) {
-  // const byte puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+bool c_is_punct(char c) {
+  // const char puntcs[] = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
   return (c >= '!' && c <= '/') 
   || (c >= ':' && c <= '@') 
   || (c >= '[' && c <= '`')
   || (c >= '{' && c <= '~');
 }
-bool c_is_lower(byte c) {
+bool c_is_lower(char c) {
   return c >= 'a' && c <= 'z';
 }
-bool c_is_upper(byte c) {
+bool c_is_upper(char c) {
   return c >= 'A' && c <= 'Z';
 }
-bool c_is_cntrl(byte c) {
+bool c_is_cntrl(char c) {
   return (c >= 0 || c <= 31) || c == 127;
 }
 
-byte c_to_lower(byte c) {
+char c_to_lower(char c) {
   return c_is_upper(c) ? c - 'A' + 'a' : c;
 }
-byte c_to_upper(byte c) {
+char c_to_upper(char c) {
   return c_is_lower(c) ? c - 'a' + 'A' : c;
 }
 
 // TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   isize len;
-  const byte* data;
+  const char* data;
 } str;
+
+#define SV(cstr) str_from_cstr((cstr))
 
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
 #define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
 
-byte* str_to_cstr(str s) {
-  byte* res = malloc(s.len + 1);
+
+// should be freed
+char* str_to_cstr(str s) {
+  char* res = malloc(s.len + 1);
   memcpy(res, s.data, s.len);
   res[s.len + 1] = '\0';
   return res;
 }
 
 str str_clone(str s) {
-  byte* cloned = malloc(s.len);
+  char* cloned = malloc(s.len);
   memcpy(cloned, s.data, s.len);
   return (str) { s.len, cloned };
 }
 
-str str_from_cstr(const byte* s) {
+// TODO: is strlen neccessary? should use sizeof for static strings, how?
+str str_from_cstr(const char* s) {
   return (str) { strlen(s), s };
 }
 
-#define SV(cstr) str_from_cstr((cstr))
-
-str str_from_cstr_unchecked(const byte* s, isize len) {
+str str_from_cstr_unchecked(const char* s, isize len) {
   return (str) { len, s };
 }
 
@@ -103,7 +106,7 @@ str str_slice(str s, isize start, isize end) {
   };
 }
 
-str cstr_slice(const byte* c, isize start, isize end) {
+str cstr_slice(const char* c, isize start, isize end) {
   return str_slice(str_from_cstr(c), start, end);
 }
 
@@ -127,17 +130,17 @@ isize str_cmp(str a, str b) {
   else return memcmp(a.data, b.data, a.len);
 }
 
-isize str_find(str s, byte c) {
-  byte* res = memchr(s.data, c, s.len);
+isize str_find(str s, char c) {
+  char* res = memchr(s.data, c, s.len);
   return res != NULL ? res - s.data : -1;
 }
 
-isize str_find_rev(str s, byte c) {
-  byte* res = strrchr(s.data, c);
+isize str_find_rev(str s, char c) {
+  char* res = strrchr(s.data, c);
   return res != NULL ? res - s.data : -1;
 }
 
-bool str_contains(str s, byte c) {
+bool str_contains(str s, char c) {
   return str_find(s, c) != -1;
 }
 
@@ -185,12 +188,12 @@ str str_skip_rev(str s, isize n) {
   if (n > s.len) return STR_EMPTY;
   return str_slice(s, 0, s.len - n);
 }
-str str_skip_untilc(str s, byte c) {
+str str_skip_untilc(str s, char c) {
   int idx = str_find(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_skip(s, idx);
 }
-str str_skip_rev_untilc(str s, byte c) {
+str str_skip_rev_untilc(str s, char c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return STR_EMPTY;
   return str_take(s, idx);
@@ -201,12 +204,12 @@ str str_take_rev(str s, isize n) {
   if (n > s.len) return s;
   return str_slice(s, s.len - n, s.len);
 }
-str str_take_untilc(str s, byte c) {
+str str_take_untilc(str s, char c) {
   int idx = str_find(s, c);
   if (idx == -1) return s;
   return str_take(s, idx);
 }
-str str_take_rev_untilc(str s, byte c) {
+str str_take_rev_untilc(str s, char c) {
   int idx = str_find_rev(s, c);
   if (idx == -1) return s;
   return str_skip(s, idx);
@@ -221,7 +224,7 @@ str str_take_until(str s, str target) {
   return str_take(s, idx);
 }
 
-typedef bool (*CharPredicate)(byte val);
+typedef bool (*CharPredicate)(char val);
 
 isize str_advance_while(str s, CharPredicate p) {
   listfor(isize, i, &s) {
@@ -292,7 +295,7 @@ str str_trim(str s) {
 }
 
 list_def(str, StrList)
-StrList str_splitc_collect(str s, byte c) {
+StrList str_splitc_collect(str s, char c) {
   StrList ss = {0};
 
   while (s.len > 0) {
@@ -392,10 +395,10 @@ isize str_next_match(StrMatches* it) {
 // TODO: this is clutter, consider removing it
 typedef struct {
   str src;
-  const byte c;
+  const char c;
 } StrSplitChar;
 
-StrSplitChar str_splitc(str s, byte c) {
+StrSplitChar str_splitc(str s, char c) {
   return (StrSplitChar) { s, c };
 }
 
@@ -489,6 +492,8 @@ str str_next_word(StrWords* it) {
 //////////////////////
 
 list_def(char, String)
+#define SB(cstr) String_from_cstr((cstr))
+#define SBV(sb) String_to_tmp_str(sb)
 
 // THIS SHOULD'T BE DONE!!!
 // String can reallocate, so if a reference is taken earlier, it will be invalidated.
@@ -498,7 +503,6 @@ str String_to_tmp_str(String sb) {
     .data = sb.data,
   };
 }
-#define SBV(sb) String_to_tmp_str(sb)
 
 // str String_to_owned_str(String* sb) {
 //   char* s = malloc(sb->len);
@@ -521,7 +525,7 @@ void String_append_null(String* sb) {
   sb->data[sb->len] = '\0';
 }
 
-void String_append_cstr(String* sb, const byte* s) {
+void String_append_cstr(String* sb, const char* s) {
   String_append_array(sb, s, strlen(s));
   String_append_null(sb);
 }
@@ -530,15 +534,13 @@ void String_append_str(String* sb, str sv) {
   String_append_array(sb, sv.data, sv.len);
 }
 
-String String_from_cstr(const byte* s) {
+String String_from_cstr(const char* s) {
   String sb = {0};
   String_append_cstr(&sb, s);
   return sb;
 }
 
-#define SB(cstr) String_from_cstr((cstr)) 
-
-String cstr_heap_to_String(byte** s) {
+String cstr_heap_to_String(char** s) {
   return array_heap_to_String(s, strlen(*s));
 }
 
@@ -546,15 +548,16 @@ String String_from_str(str s) {
   return String_from_array(s.data, s.len);
 }
 
-byte* String_to_cstr(String sb) {
+char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_tmp_str(sb));
 }
 
 static const isize TMP_DEFAULT_LEN = 1024;
 static __thread String tmp_sb = {0};
 
+// TODO: read this
 // https://nullprogram.com/blog/2023/02/13/
-byte* str_fmt_tmp(const byte* fmt, ...) {
+char* str_fmt_tmp(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   int real_size = vsnprintf(NULL, 0, fmt, args);
@@ -574,7 +577,7 @@ byte* str_fmt_tmp(const byte* fmt, ...) {
 }
 
 // returns itself
-String String_append_fmt(String* sb, const byte* fmt, ...) {
+String String_append_fmt(String* sb, const char* fmt, ...) {
   // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
   // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
 
@@ -599,7 +602,7 @@ String String_append_fmt(String* sb, const byte* fmt, ...) {
 
 // returns itself
 String String_readline_stdin(String* sb) {
-  byte* res = fgets(sb->data, sb->cap, stdin);
+  char* res = fgets(sb->data, sb->cap, stdin);
   if (res == NULL || ferror(stdin) != 0) sb->len = 0;
   else sb->len = strlen(sb->data);
   return *sb;
@@ -657,7 +660,7 @@ String str_repeat(String* sb, str sv, isize n) {
   return *sb;
 }
 
-#define strforeach(c, s) listforeach(const byte, c, s)
+#define strforeach(c, s) listforeach(const char, c, s)
 
 // returns itself
 String str_to_upper(String* sb, str sv) {

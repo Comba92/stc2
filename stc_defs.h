@@ -7,13 +7,14 @@
 
 typedef char      byte;
 typedef uint8_t   u8;
-typedef int8_t    i8;
 typedef uint16_t  u16;
-typedef int16_t   i16;
 typedef uint32_t  u32;
-typedef int32_t   i32;
 typedef uint64_t  u64;
+typedef int8_t    i8;
+typedef int16_t   i16;
+typedef int32_t   i32;
 typedef int64_t   i64;
+
 typedef float     f32;
 typedef double    f64;
 typedef uintptr_t uptr;
@@ -22,10 +23,14 @@ typedef size_t    usize;
 
 #define IsBetween(x, lower, upper) (((lower) <= (x)) && ((x) <= (upper)))
 #define BitNth(x) (1 << (x))
-#define BitIsSet(n, x) ((n) & BitNth(x))
+#define BitIsSet(n, x) ((n) & BitNth(x) != 0)
 
 #define FlagSet(n, f) ((n) |= (f))
 #define FlagClear(n, f) ((n) &= -(f))
 #define FlagToggle(n, f) ((n) ^= (f))
+
+#define UNUSED(v) (void)(value)
+#define TODO(msg) { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); abort(); }
+#define UNREACHABLE(msg) { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); abort(); }
 
 #endif

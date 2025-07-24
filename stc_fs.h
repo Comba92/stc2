@@ -34,10 +34,19 @@
 #ifdef STC_LOG_ERR
 #define LOG_ERR(cond, msg) if ((cond)) fs_err_print((msg));
 #else
-#define LOG_ERR(cond, msg)
+#define LOG_ERR(...)
 #endif
 
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
+// TODO: functions versions which take descriptor/handle instead of path
+
+#ifndef _WIN32
+typedef int FileDescriptor;
+#define INVALID_FD -1 
+#else
+typedef HANDLE FileDescriptor;
+#define INVALID_FD INVALID_HANDLE_VALUE
+#endif
 
 static __thread String fs_tmp_sb1 = {0};
 static __thread String fs_tmp_sb2 = {0};
@@ -113,27 +122,20 @@ bool file_close(FILE* f) {
 
 bool file_read_to_string(String* sb, const char* path) {
   FILE* f = file_open_read(path);
-  if (f == NULL) {
-    return false;
-  }
+  if (f == NULL) { return false; }
 
   // ftell is broken on linux for directories, also we are iterating the file back and forth
   // if (fseek(f, 0, SEEK_END) != 0) {
-  //   LOG_ERR(true, path)
   //   file_close(f);
   //   return false;
   // }
-
   // isize file_size = ftell(f);
   // // for some reason, this has to be done on linux when opening folders
   // if (file_size < 0 || (int) file_size == -1) {
-  //   LOG_ERR(true, path)
   //   file_close(f);
   //   return false;
   // }
-
   // if (fseek(f, 0, SEEK_SET) != 0) {
-  //   LOG_ERR(true, path)
   //   file_close(f);
   //   return false;
   // }
@@ -141,6 +143,7 @@ bool file_read_to_string(String* sb, const char* path) {
   struct stat buf;
   if (fstat(fileno(f), &buf) != 0) {
     LOG_ERR(true, path)
+    file_close(f);
     return false;
   }
 
@@ -386,6 +389,8 @@ typedef enum {
   FileType_Link,
 } FileType;
 
+// TODO: bool readonly? https://doc.rust-lang.org/std/fs/struct.Permissions.html#method.readonly
+// TODO: created, accessed, modified? https://doc.rust-lang.org/std/fs/struct.Metadata.html
 typedef struct {
   char* name;
   isize size;
@@ -548,7 +553,7 @@ DirEntries dir_entries(const char* dirpath) {
   DirIter it = dir_open(dirpath);
 
   for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
-    DirEntry to_push = { strdup(entry->name), entry->type };
+    DirEntry to_push = { strdup(entry->name), entry->size, entry->type };
     DirEntries_push(&entries, to_push);
   }
 

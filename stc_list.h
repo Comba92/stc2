@@ -14,12 +14,12 @@
 
 static const isize LIST_DEFAULT_CAP = 16; 
 
-// TODO: bitfields?
 // TODO: not sure if i want insert and remove
 // TODO: array_heap_to_list() is extremely dangerous
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
 
 // TODO: two different list_defs: one for minimal functionality and one for full
+// TODO: list_first and first_last, should they be macros?
 
 #define list_def(type, name) \
 typedef struct { \
@@ -274,6 +274,8 @@ IntList IntList_next_perm(IntList* l) {
   return *l;
 }
 
+
+// TODO: what's this doing here
 typedef struct {
   isize start, len;
 } IntSlice;
