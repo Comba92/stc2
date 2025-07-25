@@ -389,12 +389,12 @@ typedef enum {
   FileType_Link,
 } FileType;
 
-// TODO: bool readonly? https://doc.rust-lang.org/std/fs/struct.Permissions.html#method.readonly
 // TODO: created, accessed, modified? https://doc.rust-lang.org/std/fs/struct.Metadata.html
 typedef struct {
   char* name;
   isize size;
   FileType type;
+  bool readonly;
 } DirEntry;
 
 typedef struct {
@@ -500,6 +500,14 @@ DirEntry* dir_read(DirIter* it) {
 
   it->curr.name = dp->d_name;
   it->curr.size = statbuf.st_size;
+  bool can_read = statbuf.st_mode & S_IRUSR ||
+    statbuf.st_mode & S_IRGRP ||
+    statbuf.st_mode & S_IROTH;
+  bool can_write = statbuf.st_mode & S_IWUSR ||
+    statbuf.st_mode & S_IWUGRP ||
+    statbuf.st_mode & S_IWOTH;
+  it->curr.readonly = can_read && !can_write;
+
   switch (statbuf.st_mode & S_IFMT) {
     case S_IFREG: it->curr.type = FileType_File; break;
     case S_IFDIR: it->curr.type = FileType_Dir; break;
@@ -531,9 +539,12 @@ DirEntry* dir_read(DirIter* it) {
   // get file data
   it->curr.name = filename;
   it->curr.size = (((isize) it->data.nFileSizeHigh) << 32) | it->data.nFileSizeLow;
-  switch (it->data.dwFileAttributes) {
-    case FILE_ATTRIBUTE_DIRECTORY: it->curr.type = FileType_Dir; break;
-    default: it->curr.type = FileType_File; break;
+  it->curr.readonly = it->data.dwFileAttributes & FILE_ATTRIBUTE_READONLY;
+  
+  if (it->data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+    it->curr.type = FileType_Dir;
+  } else {
+    it->curr.type = FileType_File
   }
 #endif
   return &it->curr;
@@ -553,7 +564,8 @@ DirEntries dir_entries(const char* dirpath) {
   DirIter it = dir_open(dirpath);
 
   for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
-    DirEntry to_push = { strdup(entry->name), entry->size, entry->type };
+    DirEntry to_push = *entry;
+    to_push.name = strdup(entry->name);
     DirEntries_push(&entries, to_push);
   }
 
@@ -604,6 +616,8 @@ bool dir_exists(const char* path) {
 #endif
 }
 
+// TODO: file_metadata()
+
 FileType file_type(const char* path) {
 #ifndef _WIN32
   struct stat buf;
@@ -625,9 +639,10 @@ FileType file_type(const char* path) {
     return FileType_Other;
   }
 
-  switch (attribs) {
-    case FILE_ATTRIBUTE_DIRECTORY: return FileType_Dir;
-    default: return FileType_File;
+  if (attribs & FILE_ATTRIBUTE_DIRECTORY) {
+    return FileType_Dir;
+  } else {
+    return FileType_File;
   }
 #endif
 }
