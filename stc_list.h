@@ -21,6 +21,14 @@ static const isize LIST_DEFAULT_CAP = 16;
 // TODO: two different list_defs: one for minimal functionality and one for full
 // TODO: list_first and first_last, should they be macros?
 
+#define list_first(list) (list.data[0])
+#define list_last(list) (list.data[list.len-1])
+
+#define list_def_all(type, name) \
+list_def(type, name) \
+list_def_alg(type, name) \
+\
+
 #define list_def(type, name) \
 typedef struct { \
   isize len, cap; \
@@ -58,10 +66,6 @@ void name##_resize(name* l, isize new_len, type value) { \
     l->len = new_len; \
   } else { \
     name##_reserve(l, l->len + new_len); \
-    /*isize range = (new_len - l->len); \
-    for (int i=0; i<range; ++i) { \
-      l->data[l->len + i] = value; \
-    } */ \
     rangefor(int, i, l->len, new_len) { \
       l->data[i] = value; \
     } \
@@ -100,28 +104,12 @@ void name##_swap(name* l, isize a, isize b) { \
   l->data[b] = tmp; \
 } \
  \
-name name##_shuffle(name* l) { \
-  /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
-  srand(time(NULL)); \
-  for(isize i=l->len-1; i>0; --i) { \
-    isize r = rand() % (i+1); \
-    name##_swap(l, i, r); \
-  } \
-  return *l; \
-} \
 type name##_remove_swap(name* l, isize i) { \
   name##_assert(*l, i); \
   l->len--; \
   type res = l->data[i]; \
   l->data[i] = l->data[l->len]; \
   return res; \
-} \
- \
-name name##_reverse(name* l) { \
-  for(isize left=0, right=l->len-1; left<right; ++left, --right) { \
-    name##_swap(l, left, right); \
-  } \
-  return *l; \
 } \
  \
 void name##_append_array(name* l, const type* arr, isize arr_len) { \
@@ -162,6 +150,139 @@ void name##_free(name* l) { \
   l->data = NULL; \
 } \
  \
+
+#define list_def_alg_fn(type, name, cmpfn) \
+name name##_shuffle(name* l) { \
+  /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
+  srand(time(NULL)); \
+  for(isize i=l->len-1; i>0; --i) { \
+    isize r = rand() % (i+1); \
+    name##_swap(l, i, r); \
+  } \
+  return *l; \
+} \
+ \
+name name##_reverse(name* l) { \
+  for(isize left=0, right=l->len-1; left<right; ++left, --right) { \
+    name##_swap(l, left, right); \
+  } \
+  return *l; \
+} \
+ \
+typedef isize (*name##CmpFn)(const type* a, const type* b); \
+isize name##_find_idx(const name* l, type value) { \
+  listfor(isize, i, l) { \
+    if (cmpfn(&l->data[i], &value) == 0) return i; \
+  } \
+ \
+  return -1; \
+} \
+ \
+bool name##_contains(const name* l, type value) { \
+  return name##_find_idx(l, value) != -1; \
+} \
+ \
+bool name##_is_sorted(const name* l) { \
+  for(isize i=0; i<l->len-1; ++i) { \
+    if (cmpfn(&l->data[i], &l->data[i+1]) >= 0) return false; \
+  } \
+  return true; \
+} \
+ \
+name name##_sort(name* l) { \
+  /* we cast the function pointer because we are crazy and we can do that */ \
+  qsort(l->data, l->len, sizeof(type), (int (*)(const void*, const void*)) cmpfn); \
+  return *l; \
+} \
+ \
+typedef bool (*name##EqFn)(const type* val); \
+isize name##_find(const name* l, name##EqFn pred) { \
+  listfor(isize, i, l) { \
+    if (pred(&l->data[i])) return i; \
+  } \
+ \
+  return -1; \
+} \
+bool name##_all(const name* l, name##EqFn pred) { \
+  listfor(isize, i, l) { \
+    if (!pred(&l->data[i])) return false; \
+  } \
+  return true; \
+} \
+ \
+bool name##_any(const name* l, name##EqFn pred) { \
+  listfor(isize, i, l) { \
+    if (pred(&l->data[i])) return true; \
+  } \
+  return false; \
+} \
+ \
+isize name##_count(const name* l, name##EqFn pred) { \
+  isize count = 0; \
+  listfor(isize, i, l) { \
+    count += pred(&l->data[i]); \
+  } \
+  return count; \
+} \
+ \
+name name##_retain(name* l, name##EqFn pred) { \
+  isize curr = 0; \
+  listfor(isize, i, l) { \
+    if (pred(&l->data[i])) l->data[curr++] = l->data[i]; \
+  } \
+  l->len = curr; \
+  return *l; \
+} \
+name name##_filter(const name* l, name##EqFn pred) { \
+  name res = name##_clone(*l); \
+  return name##_retain(&res, pred); \
+} \
+ \
+name name##_dedup(name* l) { \
+  if (!name##_is_sorted(l)) name##_sort(l); \
+  isize curr = 0; \
+  for (isize i=0; i<l->len-1; ++i) { \
+    type* a = &l->data[i]; \
+    type* b = &l->data[i+1]; \
+    if (cmpfn(a, b) < 0) l->data[curr++] = l->data[i]; \
+  } \
+  l->len = curr; \
+  return *l; \
+} \
+isize name##_bsearch(const name* l, type val) { \
+  type* res = bsearch( \
+    &val, \
+    l->data, \
+    sizeof(type), \
+    l->len, \
+    (int (*)(const void*, const void*)) cmpfn \
+  ); \
+  return res - l->data; \
+} \
+ \
+name name##_next_perm(name* l) { \
+  isize i; \
+ \
+  /* find pivot */ \
+  for(i=l->len-2; i >= 0 && cmpfn(&l->data[i], &l->data[i+1]) >= 0; --i); \
+ \
+  /* no pivot, reverse list (this is the last perm) */ \
+  if (i == -1) return name##_reverse(l); \
+ \
+  type pivot = l->data[i]; \
+  /* find smallest number right to pivot */ \
+  isize j; \
+  for(j=l->len-1; j > i && cmpfn(&l->data[j], &pivot) <= 0; --j); \
+  name##_swap(l, i, j); \
+ \
+  for(isize left=i+1, right=l->len-1; left<right; ++left, --right) { \
+    name##_swap(l, left, right); \
+  } \
+ \
+  return *l; \
+} \
+
+#define list_def_alg(type, name) \
 typedef isize (*name##CmpFn)(const type* a, const type* b); \
 isize name##_find(const name* l, type value, name##CmpFn pred) { \
   const type* b = (const type*) &value; \
@@ -193,7 +314,7 @@ name name##_sort(name* l, name##CmpFn pred) { \
 } \
  \
 typedef bool (*name##EqFn)(const type* val); \
-bool name##_all(name* l, name##EqFn pred) { \
+bool name##_all(const name* l, name##EqFn pred) { \
   listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     if (!pred(it)) return false; \
@@ -201,7 +322,7 @@ bool name##_all(name* l, name##EqFn pred) { \
   return true; \
 } \
  \
-bool name##_any(name* l, name##EqFn pred) { \
+bool name##_any(const name* l, name##EqFn pred) { \
   listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
     if (pred(it)) return true; \
@@ -209,7 +330,7 @@ bool name##_any(name* l, name##EqFn pred) { \
   return false; \
 } \
  \
-isize name##_count(name* l, name##EqFn pred) { \
+isize name##_count(const name* l, name##EqFn pred) { \
   isize count = 0; \
   listfor(isize, i, l) { \
     const type* it = (const type*) &l->data[i]; \
@@ -239,7 +360,7 @@ name name##_dedup(name* l, name##CmpFn pred) { \
   l->len = curr; \
   return *l; \
 } \
-isize name##_bsearch(name* l, type val, name##CmpFn pred) { \
+isize name##_bsearch(const name* l, type val, name##CmpFn pred) { \
   type* res = bsearch( \
     (const type*) &val, \
     (const type*) l->data, \
@@ -249,30 +370,9 @@ isize name##_bsearch(name* l, type val, name##CmpFn pred) { \
   ); \
   return res - l->data; \
 } \
-
+ \
+ 
 list_def(int, IntList)
-
-IntList IntList_next_perm(IntList* l) {
-  isize i;
-
-  // find pivot
-  for(i=l->len-2; i >= 0 && l->data[i] >= l->data[i+1]; --i);
-
-  // no pivot, reverse list (this is the last perm)
-  if (i == -1) return IntList_reverse(l);
-
-  int pivot = l->data[i];
-  // find smallest number right to pivot
-  isize j;
-  for(j=l->len-1; j > i && l->data[j] <= pivot; --j);
-  IntList_swap(l, i, j);
-
-  for(isize left=i+1, right=l->len-1; left<right; ++left, --right) {
-    IntList_swap(l, left, right);
-  }
-
-  return *l;
-}
 
 
 // TODO: what's this doing here

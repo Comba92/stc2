@@ -3,8 +3,11 @@
 
 int main() {
   String sb = {0};
-  // file_read_to_string(&sb, "fag.txt");
-  // file_read_to_string(&sb, "test.txt");
+  file_read_to_string(&sb, "fag.txt");
+  file_read_to_string(&sb, "fs_test_dir/test.txt");
+  printf("File contents: "str_fmt"\n", str_arg(sb));
+  file_read_to_string(&sb, "fs_test_dir");
+  printf("File contents: "str_fmt"\n", str_arg(sb));
 
   printf("%s\n", path_filename("D:\\code\\stc2\\str_test.c"));
   printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));

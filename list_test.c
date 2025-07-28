@@ -11,8 +11,8 @@ struct Dummy dummy_new() {
   return (struct Dummy) { rand() % 69, rand() % 420 };
 }
 
-list_def(struct Dummy, DummyList)
-list_def(char*, StringList)
+list_def_all(struct Dummy, DummyList)
+list_def_all(char*, StringList)
 
 bool int_is_even(const int* val) {
   return *val % 2 == 0;
@@ -21,6 +21,8 @@ bool int_is_even(const int* val) {
 isize int_cmp(const int* a, const int* b) {
   return *a - *b;
 }
+
+list_def_alg_fn(int, IntList, int_cmp)
 
 int main() {
   IntList list = {0};
@@ -42,11 +44,11 @@ int main() {
   }
   printf("len = %d, cap = %d\n", list.len, list.cap);
 
-  printf("Value 30 at index: %d\n", IntList_find(&list, 30, int_cmp));
-  printf("Value 5 at index: %d\n", IntList_find(&list, 5, int_cmp));
+  printf("Value 30 at index: %d\n", IntList_find_idx(&list, 30));
+  printf("Value 5 at index: %d\n", IntList_find_idx(&list, 5));
 
   printf("Filtering:\n");
-  IntList_filter(&list, int_is_even);
+  IntList_retain(&list, int_is_even);
   listfor(int, i, &list) {
     printf("%d = %d\n", i, list.data[i]);
   }
@@ -90,7 +92,7 @@ int main() {
     printf("%d\n", r.data[i]);
   }
   printf("\n\n");
-  IntList_sort(&r, int_cmp);
+  IntList_sort(&r);
   listfor(int, i, &r) {
     printf("%d\n", r.data[i]);
   }

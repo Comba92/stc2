@@ -33,4 +33,6 @@ typedef size_t    usize;
 #define TODO(msg) { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); abort(); }
 #define UNREACHABLE(msg) { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); abort(); }
 
+// TODO: Logging
+
 #endif

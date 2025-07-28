@@ -7,7 +7,7 @@ str: str_test.c
 	gcc str_test.c -o str_test -Wall
 
 list: list_test.c
-	gcc list_test.c -o list_test -Wall
+	gcc list_test.c -o list_test -Wall -Wextra
 
 map: map_test.c
 	gcc map_test.c -o map_test -Wall

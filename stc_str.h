@@ -55,7 +55,7 @@ typedef struct {
   const char* data;
 } str;
 
-#define SV(cstr) str_from_cstr((cstr))
+#define SV(str) str_from_cstr_unchecked((str), sizeof((str)))
 
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
@@ -492,7 +492,7 @@ str str_next_word(StrWords* it) {
 //////////////////////
 
 list_def(char, String)
-#define SB(cstr) String_from_cstr((cstr))
+#define SB(str) String_from_str(SV(str))
 #define SBV(sb) String_to_tmp_str(sb)
 
 // THIS SHOULD'T BE DONE!!!
@@ -552,7 +552,6 @@ char* String_to_cstr(String sb) {
   return str_to_cstr(String_to_tmp_str(sb));
 }
 
-static const isize TMP_DEFAULT_LEN = 1024;
 static __thread String tmp_sb = {0};
 
 // TODO: read this

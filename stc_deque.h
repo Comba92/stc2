@@ -157,6 +157,8 @@ Deque deque_from_array(int* data, isize len) {
 //   }
 // }
 
+// TODO: deque_make_contiguos(Deque* d) {}
+
 void deque_free(Deque* d) {
   free(d->data);
   d->len = d->cap = d->front = d->back = 0;

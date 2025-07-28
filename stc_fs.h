@@ -39,6 +39,7 @@
 
 // TODO: maybe returning bools is not a great idea, returning 0 on success might be better
 // TODO: functions versions which take descriptor/handle instead of path
+// IDEA: consider storing file descriptor in a map, and closing them all at once
 
 #ifndef _WIN32
 typedef int FileDescriptor;
@@ -582,7 +583,6 @@ DirEntries dir_entries_sorted(const char* dirpath) {
   qsort(entries.data, entries.len, sizeof(DirEntry), dir_entries_cmp);
   return entries;
 }
-
 
 /////////////////////
 
