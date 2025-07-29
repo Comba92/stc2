@@ -13,7 +13,7 @@ int main() {
   printf("%s\n", path_extension("D:\\code\\stc2\\str_test.c"));
 
   DirEntries entries = {0};
-  entries = dir_entries_sorted(".");
+  entries = dir_entries_sorted(".", false);
 
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
@@ -28,7 +28,7 @@ int main() {
   }
   
   dir_entries("/home/comba/");
-  entries = dir_entries_sorted("..");
+  entries = dir_entries_sorted("..", false);
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
     printf("%s %d\n", e->name, e->type);
@@ -108,4 +108,10 @@ int main() {
   printf("Delete rec: %d\n", dir_delete_recursive("./test_copy"));
   dir_copy_recursive("./test_copy_del/", "./fs_test_dir/test_copy_del", false);
   printf("Delete rec: %d\n", dir_delete_recursive("./test_copy_del"));
+
+  entries = dir_entries_recursive("./fs_test");
+  printf("Entries collected = %ld\n", entries.len);
+  listforeach(DirEntry, e, &entries) {
+    printf("%s %s %d\n", e->parent, e->name, e->type);
+  }
 }

@@ -49,7 +49,6 @@ char c_to_upper(char c) {
   return c_is_lower(c) ? c - 'a' + 'A' : c;
 }
 
-// TODO: consider generalizing the slice type, and consider which functions should have by default
 typedef struct {
   isize len;
   const char* data;
@@ -76,7 +75,6 @@ str str_clone(str s) {
   return (str) { s.len, cloned };
 }
 
-// TODO: is strlen neccessary? should use sizeof for static strings, how?
 str str_from_cstr(const char* s) {
   return (str) { strlen(s), s };
 }

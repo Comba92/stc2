@@ -37,18 +37,6 @@
 #define LOG_ERR(...)
 #endif
 
-// TODO: maybe returning bools is not a great idea, returning 0 on success might be better
-// TODO: functions versions which take descriptor/handle instead of path
-// IDEA: consider storing file descriptor in a map, and closing them all at once
-
-#ifndef _WIN32
-typedef int FileDescriptor;
-#define INVALID_FD -1 
-#else
-typedef HANDLE FileDescriptor;
-#define INVALID_FD INVALID_HANDLE_VALUE
-#endif
-
 static __thread String fs_tmp_sb1 = {0};
 static __thread String fs_tmp_sb2 = {0};
 
@@ -117,14 +105,13 @@ bool file_close(FILE* f) {
   return res;
 }
 
-// TODO: consider memory mapped file reading?
 // https://stackoverflow.com/questions/10836609/fastest-technique-to-read-a-file-into-memory/10836820#10836820
 // https://stackoverflow.com/questions/3002122/fastest-file-reading-in-c
 
 bool file_read_to_string(String* sb, const char* path) {
   FILE* f = file_open_read(path);
   if (f == NULL) { return false; }
-
+  
   // ftell is broken on linux for directories, also we are iterating the file back and forth
   // if (fseek(f, 0, SEEK_END) != 0) {
   //   file_close(f);
@@ -159,14 +146,14 @@ bool file_read_to_string(String* sb, const char* path) {
   return read == size;
 }
 
-bool file_write_bytes(const char* path, const char* data, isize len) {
-  FILE* fd = file_open_write(path);
-  isize wrote = fwrite(data, 1, len, fd);
+bool file_write_bytes(const char* path, const byte* data, isize len) {
+  FILE* f = file_open_write(path);
+  if (f == NULL) { return false; }
+  
+  isize wrote = fwrite(data, 1, len, f);
   bool res = wrote != len;
-
   LOG_ERR(!res, path)
-
-  return file_close(fd) && res;
+  return file_close(f) && res;
 }
 
 /////////////////////
@@ -392,6 +379,7 @@ typedef enum {
 
 // TODO: created, accessed, modified? https://doc.rust-lang.org/std/fs/struct.Metadata.html
 typedef struct {
+  char* parent;
   char* name;
   isize size;
   FileType type;
@@ -457,7 +445,6 @@ bool dir_close(DirIter* it) {
   return res;
 }
 
-
 DirEntry* dir_read(DirIter* it) {
 #ifndef _WIN32
   #ifdef STC_LOG_ERR
@@ -496,6 +483,7 @@ DirEntry* dir_read(DirIter* it) {
     it->curr.name = "";
     it->curr.size = -1;
     it->curr.type = FileType_Other;
+    it->curr.readonly = false;
     return &it->curr;
   }
 
@@ -545,7 +533,7 @@ DirEntry* dir_read(DirIter* it) {
   if (it->data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
     it->curr.type = FileType_Dir;
   } else {
-    it->curr.type = FileType_File
+    it->curr.type = FileType_File;
   }
 #endif
   return &it->curr;
@@ -556,7 +544,10 @@ DirEntry* dir_read(DirIter* it) {
 list_def(DirEntry, DirEntries)
 void DirEntries_drop(DirEntries* entries) {
   if (entries->data == NULL) return;
-  listforeach(DirEntry, e, entries) free(e->name);
+  listforeach(DirEntry, e, entries) {
+    free(e->parent);
+    free(e->name);
+  }
   free(entries->data);
 }
 
@@ -573,13 +564,43 @@ DirEntries dir_entries(const char* dirpath) {
   return entries;
 }
 
+DirEntries dir_entries_recursive(const char* dirpath) {
+  DirEntries entries = {0};
+  DirIter it = dir_open(dirpath);
+
+  char* parent = strdup(dirpath);
+  String subdir = String_from_cstr(dirpath);
+  for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
+    DirEntry to_push = *entry;
+    to_push.name = strdup(entry->name);
+    to_push.parent = parent;
+    DirEntries_push(&entries, to_push);
+    
+    if (to_push.type == FileType_Dir) {
+      path_push(&subdir, to_push.name);
+      DirEntries rec = dir_entries_recursive(subdir.data);
+      path_pop(&subdir);
+
+      DirEntries_append(&entries, rec);
+      // do not use DirEntries_drop; or else we invalidate pointers in entries too
+      DirEntries_free(&rec);
+    }
+  }
+  String_free(&subdir);
+
+  return entries;
+}
+
 int dir_entries_cmp(const void* a, const void* b) {
   char* a_str = ((DirEntry*)a)->name;
   char* b_str = ((DirEntry*)b)->name;
   return strcmp(a_str, b_str);
 }
-DirEntries dir_entries_sorted(const char* dirpath) {
-  DirEntries entries = dir_entries(dirpath);
+DirEntries dir_entries_sorted(const char* dirpath, bool recursive) {
+  DirEntries entries = recursive 
+    ? dir_entries_recursive(dirpath)
+    : dir_entries(dirpath);
+
   qsort(entries.data, entries.len, sizeof(DirEntry), dir_entries_cmp);
   return entries;
 }
@@ -615,8 +636,6 @@ bool dir_exists(const char* path) {
   return attribs != INVALID_FILE_ATTRIBUTES && (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 #endif
 }
-
-// TODO: file_metadata()
 
 FileType file_type(const char* path) {
 #ifndef _WIN32
