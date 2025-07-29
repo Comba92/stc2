@@ -3,6 +3,9 @@ all: fs str list map grep bench
 fs: fs_test.c
 	gcc fs_test.c -o fs_test -Wall
 
+build: build_test.c
+	gcc build_test.c -o build_test -Wall
+
 str: str_test.c
 	gcc str_test.c -o str_test -Wall
 

@@ -17,6 +17,9 @@ static const isize LIST_DEFAULT_CAP = 16;
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
 // TODO: list_def probably defines too many functions
 
+// TODO: pop, remove, free, retain, filter, dedpu, are problematic, what if elemnt has to be freed?
+// should probably provide element destructor
+
 #define FIRST(list) ((list).data[0])
 #define LAST(list) ((list).data[(list).len-1])
 

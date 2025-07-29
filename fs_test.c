@@ -27,7 +27,7 @@ int main() {
     printf("%s\n", entry->name);
   }
   
-  dir_entries("/home/comba/");
+  dir_entries("/home/comba/", false);
   entries = dir_entries_sorted("..", false);
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
@@ -108,10 +108,10 @@ int main() {
   printf("Delete rec: %d\n", dir_delete_recursive("./test_copy"));
   dir_copy_recursive("./test_copy_del/", "./fs_test_dir/test_copy_del", false);
   printf("Delete rec: %d\n", dir_delete_recursive("./test_copy_del"));
-
-  entries = dir_entries_recursive("./fs_test");
+  
+  entries = dir_entries_recursive("./fs_test_dir");
   printf("Entries collected = %ld\n", entries.len);
   listforeach(DirEntry, e, &entries) {
-    printf("%s %s %d\n", e->parent, e->name, e->type);
+    printf("%s\t\t%s %d\n", e->parent, e->name, e->type);
   }
 }

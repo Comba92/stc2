@@ -137,7 +137,7 @@ bool file_read_to_string(String* sb, const char* path) {
 
   usize size = buf.st_size;
   String_reserve(sb, size);
-  isize read = fread(sb->data, 1, size, f);
+  usize read = fread(sb->data, 1, size, f);
   sb->len = read;
 
   LOG_ERR(read != size, path)
@@ -386,6 +386,12 @@ typedef struct {
   bool readonly;
 } DirEntry;
 
+void DirEntry_free(DirEntry* entry) {
+  free(entry->parent);
+  free(entry->name);
+  entry->parent = entry->name = NULL;
+}
+
 typedef struct {
 #ifndef _WIN32
   int dir_fd;
@@ -413,7 +419,7 @@ DirIter dir_open(const char* dirpath) {
   LOG_ERR(dir == NULL, dirpath)
 
   bool had_error = dir_fd == -1 || dir == NULL;
-  DirIter it = { dir_fd, dir, had_error, had_error ? 1 : 0 };
+  DirIter it = { dir_fd, dir, had_error, had_error ? 1 : 0, {0} };
 #else
   static char buf[PATH_MAX_LEN];
   snprintf(buf, PATH_MAX_LEN, "%s\\*", dirpath);
@@ -428,7 +434,7 @@ DirIter dir_open(const char* dirpath) {
   LOG_ERR(h == INVALID_HANDLE_VALUE, dirpath)
 
   bool had_error = h == INVALID_HANDLE_VALUE;
-  DirIter it = { data, h, had_error, had_error ? 1 : 0 };
+  DirIter it = { data, h, had_error, had_error ? 1 : 0, {0} };
 #endif
   return it;
 }
@@ -493,7 +499,7 @@ DirEntry* dir_read(DirIter* it) {
     statbuf.st_mode & S_IRGRP ||
     statbuf.st_mode & S_IROTH;
   bool can_write = statbuf.st_mode & S_IWUSR ||
-    statbuf.st_mode & S_IWUGRP ||
+    statbuf.st_mode & S_IWGRP ||
     statbuf.st_mode & S_IWOTH;
   it->curr.readonly = can_read && !can_write;
 
@@ -544,14 +550,11 @@ DirEntry* dir_read(DirIter* it) {
 list_def(DirEntry, DirEntries)
 void DirEntries_drop(DirEntries* entries) {
   if (entries->data == NULL) return;
-  listforeach(DirEntry, e, entries) {
-    free(e->parent);
-    free(e->name);
-  }
+  listforeach(DirEntry, e, entries) DirEntry_free(e);
   free(entries->data);
 }
 
-DirEntries dir_entries(const char* dirpath) {
+static DirEntries dir_entries_single(const char* dirpath) {
   DirEntries entries = {0};
   DirIter it = dir_open(dirpath);
 
@@ -564,16 +567,15 @@ DirEntries dir_entries(const char* dirpath) {
   return entries;
 }
 
-DirEntries dir_entries_recursive(const char* dirpath) {
+static DirEntries dir_entries_recursive(const char* dirpath) {
   DirEntries entries = {0};
   DirIter it = dir_open(dirpath);
 
-  char* parent = strdup(dirpath);
   String subdir = String_from_cstr(dirpath);
   for (DirEntry* entry; (entry = dir_read(&it)) != NULL;) {
     DirEntry to_push = *entry;
     to_push.name = strdup(entry->name);
-    to_push.parent = parent;
+    to_push.parent = strdup(dirpath);
     DirEntries_push(&entries, to_push);
     
     if (to_push.type == FileType_Dir) {
@@ -591,22 +593,27 @@ DirEntries dir_entries_recursive(const char* dirpath) {
   return entries;
 }
 
+DirEntries dir_entries(const char* dirpath, bool recursive) {
+  return recursive 
+    ? dir_entries_recursive(dirpath)
+    : dir_entries_single(dirpath);
+}
+
 int dir_entries_cmp(const void* a, const void* b) {
   char* a_str = ((DirEntry*)a)->name;
   char* b_str = ((DirEntry*)b)->name;
   return strcmp(a_str, b_str);
 }
 DirEntries dir_entries_sorted(const char* dirpath, bool recursive) {
-  DirEntries entries = recursive 
-    ? dir_entries_recursive(dirpath)
-    : dir_entries(dirpath);
-
+  DirEntries entries = dir_entries(dirpath, recursive);
   qsort(entries.data, entries.len, sizeof(DirEntry), dir_entries_cmp);
   return entries;
 }
 
 /////////////////////
 
+
+// TODO: fix these using stat error codes
 bool path_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
@@ -617,6 +624,7 @@ bool path_exists(const char* path) {
 #endif
 }
 
+// TODO: fix these using stat error codes
 bool file_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
@@ -626,6 +634,7 @@ bool file_exists(const char* path) {
 #endif
 }
 
+// TODO: fix these using stat error codes
 bool dir_exists(const char* path) {
 #ifndef _WIN32
   struct stat buf;
@@ -798,8 +807,18 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
 #ifndef _WIN32
   if (!overwrite && path_exists(dst)) return false;
 
+  struct stat buf;
+  if (stat(src, &buf) != 0) {
+    LOG_ERR(true, src)
+    return false;
+  }
+  mode_t mode = buf.st_mode;
+
   int res = rename(src, dst) == 0;
   LOG_ERR(!res, src)
+  
+  int chmod_res = chmod(dst, mode);
+  LOG_ERR(chmod_res != 0, dst)
 #else
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefile
   // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa

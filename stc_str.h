@@ -54,7 +54,8 @@ typedef struct {
   const char* data;
 } str;
 
-#define SV(str) str_from_cstr_unchecked((str), sizeof((str)))
+// we do not keep the null char
+#define SV(str) str_from_cstr_unchecked((str), sizeof((str))-1)
 #define SVC(cstr) str_from_cstr((cstr))
 
 #define str_fmt "%.*s"
@@ -493,6 +494,7 @@ str str_next_word(StrWords* it) {
 //////////////////////
 
 list_def(char, String)
+list_def(String, StringList)
 #define SB(str) String_from_str(SV(str))
 #define SBC(cstr) String_from_cstr(cstr)
 #define SBV(sb) String_to_tmp_str(sb)
@@ -578,6 +580,14 @@ char* str_fmt_tmp(const char* fmt, ...) {
 }
 
 // returns itself
+String String_readline_stdin(String* sb) {
+  char* res = fgets(sb->data, sb->cap, stdin);
+  if (res == NULL || ferror(stdin) != 0) sb->len = 0;
+  else sb->len = strlen(sb->data);
+  return *sb;
+}
+
+// returns itself
 String String_append_fmt(String* sb, const char* fmt, ...) {
   // we can't reuse str_fmt_tmp for this; you can't pass varargs to another function
   // https://stackoverflow.com/questions/3530771/passing-variable-arguments-to-another-function-that-accepts-a-variable-argument
@@ -598,14 +608,6 @@ String String_append_fmt(String* sb, const char* fmt, ...) {
   va_end(args);
 
   String_append(sb, tmp_sb);
-  return *sb;
-}
-
-// returns itself
-String String_readline_stdin(String* sb) {
-  char* res = fgets(sb->data, sb->cap, stdin);
-  if (res == NULL || ferror(stdin) != 0) sb->len = 0;
-  else sb->len = strlen(sb->data);
   return *sb;
 }
 
