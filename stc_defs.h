@@ -22,6 +22,8 @@ typedef uintptr_t uptr;
 typedef ptrdiff_t isize;
 typedef size_t    usize;
 
+#define ArrayLen(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #define IsBetween(x, lower, upper) (((lower) <= (x)) && ((x) <= (upper)))
 #define BitNth(x) (1 << (x))
 #define BitIsSet(n, x) ((n) & BitNth(x) != 0)

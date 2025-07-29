@@ -15,6 +15,7 @@ static const isize LIST_DEFAULT_CAP = 16;
 
 // TODO: array_heap_to_list() is extremely dangerous
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
+// TODO: list_def probably defines too many functions
 
 #define FIRST(list) ((list).data[0])
 #define LAST(list) ((list).data[(list).len-1])

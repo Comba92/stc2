@@ -55,6 +55,7 @@ typedef struct {
 } str;
 
 #define SV(str) str_from_cstr_unchecked((str), sizeof((str)))
+#define SVC(cstr) str_from_cstr((cstr))
 
 #define str_fmt "%.*s"
 #define str_arg(s) (int) (s).len, (s).data
@@ -339,6 +340,7 @@ StrList str_split_when_collect(str s, CharPredicate pred) {
   return ss;
 }
 
+// TODO: does this work on windows? (line separator is "\r\n")
 StrList str_lines_collect(str s) {
   return str_splitc_collect(s, '\n');
 }
@@ -465,6 +467,7 @@ str str_next_split_when(StrSplitWhen* it) {
   return res;
 }
 
+// TODO: does this work on windows? (line separator is "\r\n")
 typedef StrSplitChar StrLines;
 StrLines str_lines(str s) {
   return str_splitc(s, '\n');
@@ -491,6 +494,7 @@ str str_next_word(StrWords* it) {
 
 list_def(char, String)
 #define SB(str) String_from_str(SV(str))
+#define SBC(cstr) String_from_cstr(cstr)
 #define SBV(sb) String_to_tmp_str(sb)
 
 // THIS SHOULD'T BE DONE!!!
