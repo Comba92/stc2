@@ -36,7 +36,7 @@ typedef size_t    usize;
 #define BitClearNth(n, b) FlagClear((n), BitNth((b)))
 #define BitToggleNth(n, b) FlagToggle((n), BitNth((b)))
 
-#define UNUSED(v) (void)(value)
+#define UNUSED(val) (void)(val)
 #define TODO(msg) { fprintf(stderr, "%s:%d:%s() TODO: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }
 #define UNREACHABLE(msg) { fprintf(stderr, "%s:%d:%s() UNREACHABLE: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }
 #define ASSERT(cond, msg) { if(!(cond)) { fprintf(stderr, "%s:%d:%s() ASSERT: (" #cond ") %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }}

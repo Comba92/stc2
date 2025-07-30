@@ -62,6 +62,7 @@ typedef struct {
 #define str_arg(s) (int) (s).len, (s).data
 #define str_dbg(s) printf("\"%.*s\"\n", (int) (s).len, (s).data);
 
+list_def(char*, CstrList)
 
 // should be freed
 char* str_to_cstr(str s) {

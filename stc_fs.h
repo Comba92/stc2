@@ -308,7 +308,7 @@ bool path_set_extension(String* sb, const char* extension) {
   char* ext_start = strrchr(sb->data, '.');
 
   if (ext_start != NULL) {
-    sb->len = (ext_start - sb->data) - 1;
+    sb->len = (ext_start - sb->data);
   }
 
   if (!has_dot) String_push(sb, '.');
@@ -832,12 +832,12 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
 }
 
 bool file_delete(const char* src) {
-  if (path_is_absolute(src)) {
-    fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE FILE, ABORTING\n");
-    return false;
-  }
+  // if (path_is_absolute(src)) {
+  //   fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE FILE, ABORTING\n");
+  //   return false;
+  // }
 
-  int res = remove(src) == 0;
+  bool res = remove(src) == 0;
   LOG_ERR(!res, src)
   return res;
 }
