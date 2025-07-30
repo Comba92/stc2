@@ -494,7 +494,6 @@ str str_next_word(StrWords* it) {
 //////////////////////
 
 list_def(char, String)
-list_def(String, StringList)
 #define SB(str) String_from_str(SV(str))
 #define SBC(cstr) String_from_cstr(cstr)
 #define SBV(sb) String_to_tmp_str(sb)

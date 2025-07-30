@@ -32,7 +32,7 @@
 #endif
 
 #ifdef STC_LOG_ERR
-#define LOG_ERR(cond, msg) if ((cond)) fs_err_print((msg));
+#define LOG_ERR(cond, msg) if ((cond)) fs_err_print((msg), __PRETTY_FUNCTION__);
 #else
 #define LOG_ERR(...)
 #endif
@@ -75,12 +75,12 @@ char* fs_err_msg() {
 #endif
 }
 
-void fs_err_print(const char* msg) {
+void fs_err_print(const char* msg, const char* fn) {
   int err = fs_err_code();
   if (msg == NULL || msg[0] == '\0') {
-    fprintf(stderr, "[%d] %s\n", err, fs_err_msg());
+    fprintf(stderr, "[%s: %d] %s\n", fn, err, fs_err_msg());
   } else {
-    fprintf(stderr, "%s: [%d] %s\n", msg, err, fs_err_msg());
+    fprintf(stderr, "%s: [%s: %d] %s\n", msg, fn, err, fs_err_msg());
   }
 }
 
@@ -804,9 +804,9 @@ bool file_copy(const char* src, const char* dst, bool overwrite) {
 }
 
 bool file_move(const char* src, const char* dst, bool overwrite) {
-#ifndef _WIN32
   if (!overwrite && path_exists(dst)) return false;
 
+#ifndef _WIN32
   struct stat buf;
   if (stat(src, &buf) != 0) {
     LOG_ERR(true, src)
@@ -814,6 +814,7 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
   }
   mode_t mode = buf.st_mode;
 
+  // rename sets its own permission to dst
   int res = rename(src, dst) == 0;
   LOG_ERR(!res, src)
   
@@ -831,6 +832,11 @@ bool file_move(const char* src, const char* dst, bool overwrite) {
 }
 
 bool file_delete(const char* src) {
+  if (path_is_absolute(src)) {
+    fprintf(stderr, "I AM NOT SURE YOU WANT TO DELETE AN ABSOLUTE FILE, ABORTING\n");
+    return false;
+  }
+
   int res = remove(src) == 0;
   LOG_ERR(!res, src)
   return res;

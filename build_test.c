@@ -4,17 +4,18 @@
 int main(int argc, char** argv) {
   binary_rebuild_itself(argv, __FILE__);
 
-  printf("Killing my pants!\n");
+  printf("Shitting my pants!\n");
 
   char* inputs[] = {
-    "fs_test.c"
+    "fs_test.c",
+    "stc_fs.h",
   };
 
-  StringList entries = get_all_c_sources_in_dir(".", false);
-  printf("Entries collected = %ld\n", entries.len);
-  listforeach(String, e, &entries) {
+  StrList entries = get_all_c_sources_in_dir(".", false);
+  printf("Entries collected = %lld\n", entries.len);
+  listforeach(str, e, &entries) {
     printf("%s\n", e->data);
   }
 
-  binary_rebuild("./fag.exe", inputs, 1);
+  binary_rebuild("./fag.exe", inputs, ArrayLen(inputs));
 }
