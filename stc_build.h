@@ -6,13 +6,15 @@
 
 #ifndef _WIN32
 #define BIN_EXTENSION ""
+#define BIN_RELATIVE "./"
 #else 
 #define BIN_EXTENSION ".exe"
+#define BIN_RELATIVE ""
 #endif
 
-// TODO: async building
-// FIX TODOs
-// better logging
+// TODO: FIX TODOs
+// TODO: better logging
+// TODO: async command running (create new process and wait for it)
 
 CstrList get_all_c_sources_in_dir(char* dirpath, bool recursive) {
   DirEntries entries = dir_entries(dirpath, recursive);
@@ -140,14 +142,28 @@ int binary_rebuild_flags(char* binpath, char** flags, isize flags_count, char** 
     CstrList_push(&cmd_cmp, flags[i]);
   }
 
-  // push inputs
+  // push inputs and sanitize
   rangefor(isize, i, 0, sources_count) {
-    CstrList_push(&cmd_cmp, sources[i]);
+    if (strchr(sources[i], ' ')) {
+      String sb = {0};
+      String_push(&sb, '"');
+      String_append_cstr(&sb, sources[i]);
+      String_push(&sb, '"');
+      String_append_null(&sb);
+
+      // memory leak here, we dont care
+      CstrList_push(&cmd_cmp, sb.data);
+    } else {
+      CstrList_push(&cmd_cmp, sources[i]);
+    }
   }
 
   // push output
   CstrList_push(&cmd_cmp, "-o");
   CstrList_push(&cmd_cmp, binpath);
+
+  // this is needed for execvpe()
+  // CstrList_push(&cmd_cmp, NULL);
 
   String cmd = {0};
   char* build_cmd = cmd_render(&cmd, cmd_cmp);
@@ -156,7 +172,9 @@ int binary_rebuild_flags(char* binpath, char** flags, isize flags_count, char** 
   CstrList_free(&cmd_cmp);
 
   // Temporary command caller
-  return system(build_cmd);
+  int res = system(build_cmd);
+  free(build_cmd);
+  return res;
 }
 
 // return 0 -> ok
@@ -184,6 +202,7 @@ int binary_exec(char* binpath) {
 #endif
 }
 
+#define BIN_REBUILD_ITSELF(argc, argv) binary_rebuild_itself((argc), (argv), __FILE__)
 void binary_rebuild_itself(int argc, char** argv, char* source) {
   UNUSED(argc);
 
@@ -194,11 +213,13 @@ void binary_rebuild_itself(int argc, char** argv, char* source) {
     "stc_build.h",
   };
 
+  char* tmpbinpath = str_fmt_tmp("%s.tmp", binpath);
+  // delte tmp file if any
+  file_delete(tmpbinpath);
+
   if (!binary_needs_rebuild(binpath, sources, ArrayLen(sources))) return;
 
   printf("Rebuilding itself!\n");
-  
-  char* tmpbinpath = str_fmt_tmp("%s.tmp", binpath);
   // move binary to tmp file
   if (!file_move(binpath, tmpbinpath, true)) TODO("fatal error");
 
@@ -208,11 +229,6 @@ void binary_rebuild_itself(int argc, char** argv, char* source) {
     file_move(tmpbinpath, binpath, true);
     TODO("fatal error");
   }
-
-// TODO: doesn't work on windows: file handle may be still open somewhere, file_move might be culpript
-#ifndef _WIN32
-  file_delete(tmpbinpath);
-#endif
 
   binary_exec(binpath);
   exit(0);
@@ -231,11 +247,6 @@ int binary_rebuild_all(char** sources, isize sources_count) {
   }
 
   return success;
-}
-
-bool generate_makefile(char* binpath) {
-  char* txt = str_fmt_tmp("run: %s\n\t%s\n", binpath, binpath);
-  return file_write_bytes("MakeMe", txt, strlen(txt));
 }
 
 #endif

@@ -78,6 +78,7 @@ str str_clone(str s) {
   return (str) { s.len, cloned };
 }
 
+// TODO:  __builtin_constant_p might be useful
 str str_from_cstr(const char* s) {
   return (str) { strlen(s), s };
 }

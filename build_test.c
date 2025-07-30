@@ -2,7 +2,7 @@
 #include "stc_build.h"
 
 int main(int argc, char** argv) {
-  binary_rebuild_itself(argc, argv, __FILE__);
+  BIN_REBUILD_ITSELF(argc, argv);
 
   printf("Shitting my pants?\n");
 
@@ -17,6 +17,7 @@ int main(int argc, char** argv) {
     printf("%s\n", *e);
   }
 
+
   int res = binary_rebuild_all(entries.data, entries.len);
   printf("Successes: %d = %lld\n", res, entries.len);
 
@@ -30,5 +31,5 @@ int main(int argc, char** argv) {
     printf("Rebuild failed!\n");
   }
 
-  binary_exec("fag.exe");
+  // binary_exec("fag.exe");
 }
