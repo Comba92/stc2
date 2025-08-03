@@ -2,19 +2,34 @@
 #include "stc_build.h"
 
 int main(int argc, char** argv) {
-  binary_rebuild_itself(argv, __FILE__);
+  BIN_REBUILD_ITSELF(argc, argv);
 
-  printf("Killing my pants!\n");
+  printf("Shitting my pants?\n");
 
   char* inputs[] = {
-    "fs_test.c"
+    "fs_test.c",
+    "stc_fs.h",
   };
 
-  StringList entries = get_all_c_sources_in_dir(".", false);
-  printf("Entries collected = %ld\n", entries.len);
-  listforeach(String, e, &entries) {
-    printf("%s\n", e->data);
+  CstrList entries = get_all_c_sources_in_dir(".", false);
+  printf("Entries collected = %lld\n", entries.len);
+  listforeach(char*, e, &entries) {
+    printf("%s\n", *e);
   }
 
-  binary_rebuild("./fag.exe", inputs, 1);
+
+  int res = binary_rebuild_all(entries.data, entries.len);
+  printf("Successes: %d = %lld\n", res, entries.len);
+
+  res = binary_rebuild("fag.exe", inputs, ArrayLen(inputs));
+  printf("Rebuild res: %d\n", res);
+  if (res == 0) {
+    printf("Rebuild succesful!\nRunning binary...\n\n");
+  } else if (res == -1) {
+    printf("Rebuild not needed!\n");
+  } else {
+    printf("Rebuild failed!\n");
+  }
+
+  // binary_exec("fag.exe");
 }

@@ -45,10 +45,15 @@ typedef size_t    usize;
 #define BitClearNth(n, b) FlagClear((n), BitNth((b)))
 #define BitToggleNth(n, b) FlagToggle((n), BitNth((b)))
 
-#define UNUSED(v) (void)(value)
-#define TODO(msg) { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); abort(); }
-#define UNREACHABLE(msg) { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); abort(); }
-#define ASSERT(cond, msg) assert((cond) && (msg));
+// TODO: implement some of those
+// https://gcc.gnu.org/onlinedocs/gcc/Bit-Operation-Builtins.html
+// https://gcc.gnu.org/onlinedocs/gcc/Byte-Swapping-Builtins.html
+// https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html
+
+#define UNUSED(val) (void)(val)
+#define TODO(msg) { fprintf(stderr, "%s:%d:%s() TODO: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }
+#define UNREACHABLE(msg) { fprintf(stderr, "%s:%d:%s() UNREACHABLE: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }
+#define ASSERT(cond, msg) { if(!(cond)) { fprintf(stderr, "%s:%d:%s() ASSERT: (" #cond ") %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }}
 
 #define Thousands(v) ((v) * 1000LL)
 #define Millions(v) (Thoudands(v) * 1000LL)
