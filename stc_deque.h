@@ -186,7 +186,7 @@ void bheap_reserve(BinaryHeap* b, isize new_cap) {
 
 #define BHEAP_LEFT(i) (2*(i) + 1)
 #define BHEAP_RIGHT(i) (2*(i) + 2)
-#define BHEAP_PARENT(i) (((i)-1) / 2) 
+#define BHEAP_PARENT(i) (((i)-1) / 2)
 
 void bheap_swap(BinaryHeap* h, isize a, isize b) {
   assert(a < h->len && "bheap access out of bounds");
@@ -196,7 +196,8 @@ void bheap_swap(BinaryHeap* h, isize a, isize b) {
   h->data[b] = tmp;
 }
 
-void bheap_push(BinaryHeap* b, int val) {
+typedef int (*BinaryHeapCmp)(int*, int*); 
+void bheap_push(BinaryHeap* b, int val, BinaryHeapCmp cmp) {
   bheap_reserve(b, b->len+1);
   
   b->data[b->len++] = val;
@@ -204,14 +205,14 @@ void bheap_push(BinaryHeap* b, int val) {
   
   isize curr = b->len-1;
   isize parent = BHEAP_PARENT(curr);
-  while (curr > 0 && b->data[curr] > b->data[parent]) {
+  while (curr > 0 && cmp(&b->data[curr], &b->data[parent]) > 0) {
     bheap_swap(b, curr, parent);
     curr = parent;
     parent = BHEAP_PARENT(curr);
   }
 }
 
-void bheap_heapify(BinaryHeap* b, isize root) {
+void bheap_heapify(BinaryHeap* b, isize root, BinaryHeapCmp cmp) {
   isize curr = root;
   
   while (true) {
@@ -219,40 +220,40 @@ void bheap_heapify(BinaryHeap* b, isize root) {
     isize right = BHEAP_RIGHT(curr);
 
     isize largest = curr;
-    if (left  < b->len && b->data[left]  > b->data[largest]) largest = left;
-    if (right < b->len && b->data[right] > b->data[largest]) largest = right;
+    if (left  < b->len && cmp(&b->data[left], &b->data[largest]) > 0) largest = left;
+    if (right < b->len && cmp(&b->data[right], &b->data[largest]) > 0) largest = right;
     if (largest == curr) break;
     bheap_swap(b, curr, largest);
     curr = largest;
   }
 }
 
-int bheap_pop(BinaryHeap* b) {
+int bheap_pop(BinaryHeap* b, BinaryHeapCmp cmp) {
   assert(b->len > 0 && "popping empty bheap");
 
   int res = b->data[b->len--];
   if (b->len == 0) return res;
 
   b->data[0] = b->data[b->len];
-  bheap_heapify(b, 0);
+  bheap_heapify(b, 0, cmp);
 
   return res;
 }
 
-int bheap_push_pop(BinaryHeap* b, int val) {
+int bheap_push_pop(BinaryHeap* b, int val, BinaryHeapCmp cmp) {
   if (b->len == 0 || b->data[0] > val) return val;
  
   int res = b->data[0];
   b->data[b->len] = val;
   bheap_swap(b, 0, b->len);
-  bheap_heapify(b, 0);
+  bheap_heapify(b, 0, cmp);
   return res;
 }
 
-BinaryHeap bheap_from_array(const int* arr, isize arr_len) {
+BinaryHeap bheap_from_array(const int* arr, isize arr_len, BinaryHeapCmp cmp) {
   isize start = arr_len / 2 - 1;
   BinaryHeap b = {0};
   memcpy(b.data, arr, arr_len * sizeof(int));
-  for(isize i=start; i >= 0; --i) bheap_heapify(&b, i);
+  for(isize i=start; i >= 0; --i) bheap_heapify(&b, i, cmp);
   return b;
 }

@@ -24,6 +24,15 @@ typedef size_t    usize;
 
 #define ArrayLen(arr) (sizeof(arr) / sizeof(arr[0]))
 
+#define Swap(type, a, b) { type tmp = (a); (a) = (b), (b) = tmp; }
+
+#define b2(x)   (   (x) | (   (x) >> 1) )
+#define b4(x)   ( b2(x) | ( b2(x) >> 2) )
+#define b8(x)   ( b4(x) | ( b4(x) >> 4) )
+#define b16(x)  ( b8(x) | ( b8(x) >> 8) )  
+#define b32(x)  (b16(x) | (b16(x) >>16) )
+#define NextPowerOfTwo(x) (b32((x)-1) + 1)
+#define IsPowerOfTwo(x) (((x) != 0) && (((x) & ((x) - 1)) == 0))
 #define IsBetween(x, lower, upper) (((lower) <= (x)) && ((x) <= (upper)))
 #define BitNth(x) (1 << (x))
 #define BitIsSet(n, x) ((n) & BitNth(x) != 0)
@@ -40,6 +49,18 @@ typedef size_t    usize;
 #define TODO(msg) { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); abort(); }
 #define UNREACHABLE(msg) { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); abort(); }
 #define ASSERT(cond, msg) assert((cond) && (msg));
+
+#define Thousands(v) ((v) * 1000LL)
+#define Millions(v) (Thoudands(v) * 1000LL)
+#define Billions(v) (Millions(v) * 1000LL)
+
+#define Kilobytes(v) ((v) * 1024LL)
+#define Megabytes(v) (Kilobytes(v) * 1024LL)
+#define Gigabytes(v) (Megabytes(v) * 1024LL)
+
+#define ToKilobytes(v) ((v) / 1024LL)
+#define ToMegabytes(v) (ToKilobytes(v) / 1024LL)
+#define ToGigabytes(v) (ToMegabytes(v) / 1024LL)
 
 // TODO: Logging
 

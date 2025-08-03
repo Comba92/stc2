@@ -11,23 +11,19 @@
 #define listforrev(type, it, list) for (type it = (list)->len-1; it >= 0; --it)
 #define listforeach(type, it, list) for (type* it = (list)->data; it < (list)->data + (list)->len; ++it)
 
-static const isize LIST_DEFAULT_CAP = 16; 
+static const isize LIST_DEFAULT_CAP = 16;
 
 // TODO: array_heap_to_list() is extremely dangerous
 // TODO: small size opt: https://nullprogram.com/blog/2016/10/07/
 // TODO: list_def probably defines too many functions
 
-// TODO: pop, remove, free, retain, filter, dedpu, are problematic, what if elemnt has to be freed?
+// TODO: free, retain, filter, dedup, are problematic, what if elemnt has to be freed?
 // should probably provide element destructor
 
 #define FIRST(list) ((list).data[0])
 #define LAST(list) ((list).data[(list).len-1])
 
-#define list_def_all(type, name) \
-  list_def(type, name) \
-  list_def_alg(type, name) \
- \
-
+#define list_def_all(type, name) list_def_alg(type, name)
 
 #define list_def(type, name) \
 typedef struct { \
@@ -139,11 +135,24 @@ name name##_clone(name l) { \
   return name##_from_array((const type*) l.data, l.len); \
 } \
  \
+typedef void (*name##DropFn)(type* val); \
+void name##_clear(name* l) { \
+  l->len = 0; \
+} \
+void name##_clear_with(name* l, name##DropFn proc) { \
+  listforeach(type, it, l) proc(it); \
+  name##_clear(l); \
+} \
+ \
 void name##_free(name* l) { \
   free(l->data); \
   l->cap = 0; \
   l->len = 0; \
   l->data = NULL; \
+} \
+void name##_free_with(name* l, name##DropFn proc) { \
+  listforeach(type, it, l) proc(it); \
+  name##_free(l); \
 } \
  \
 
@@ -152,6 +161,8 @@ void name##_free(name* l) { \
 
 
 #define list_def_alg(type, name) \
+list_def(type, name) \
+ \
 name name##_shuffle(name* l) { \
   /* https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle */ \
   srand(time(NULL)); \
