@@ -31,8 +31,10 @@ typedef size_t    usize;
 #define b8(x)   ( b4(x) | ( b4(x) >> 4) )
 #define b16(x)  ( b8(x) | ( b8(x) >> 8) )  
 #define b32(x)  (b16(x) | (b16(x) >>16) )
+
 #define NextPowerOfTwo(x) (b32((x)-1) + 1)
 #define IsPowerOfTwo(x) (((x) != 0) && (((x) & ((x) - 1)) == 0))
+
 #define IsBetween(x, lower, upper) (((lower) <= (x)) && ((x) <= (upper)))
 #define BitNth(x) (1 << (x))
 #define BitIsSet(n, x) ((n) & BitNth(x) != 0)
@@ -45,10 +47,29 @@ typedef size_t    usize;
 #define BitClearNth(n, b) FlagClear((n), BitNth((b)))
 #define BitToggleNth(n, b) FlagToggle((n), BitNth((b)))
 
-// TODO: implement some of those
 // https://gcc.gnu.org/onlinedocs/gcc/Bit-Operation-Builtins.html
 // https://gcc.gnu.org/onlinedocs/gcc/Byte-Swapping-Builtins.html
 // https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html
+
+// TODO: these only work on GGC
+
+#define LeadingZeros(x) __builtin_stdc_leading_zeros(x)
+#define TrailingZeros(x) __builtin_stdc_trailing_zeros(x)
+#define LeadingOnes(x) __builtin_stdc_leading_ones(x)
+#define TrailingOnes(x) __builtin_stdc_trailing_ones(x)
+
+#define FirstLeadingZero(x) __builtin_stdc_first_leading_zero(x)
+#define FirstTrailingZero(x) __builtin_stdc_first_trailing_zero(x)
+#define FirstLeadingOne(x) __builtin_stdc_first_leading_one(x)
+#define FirstTrailingOne(x) __builtin_stdc_first_trailing_one(x)
+
+#define CountZeros(x) __builtin_stdc_count_zeros(x)
+#define CountOnes(x) __builtin_stdc_count_ones(x)
+#define HasOnes(x) __builting_stdc_has_single_bit(x)
+
+#define SwapBytes16(x) __builtin_swap16(x)
+#define SwapBytes32(x) __builtin_swap32(x)
+#define SwapBytes64(x) __builtin_swap64(x)
 
 #define UNUSED(val) (void)(val)
 #define TODO(msg) { fprintf(stderr, "%s:%d:%s() TODO: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__, msg); abort(); }
